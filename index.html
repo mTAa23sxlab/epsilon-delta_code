@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ε–δ ビジュアライザ（ブラウザ版 / Pyodide）</title>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.29.3/full/pyodide.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+      margin: 0;
+      padding: 12px;
+      background: #eceff1;
+      color: #263238;
+    }
+    #status {
+      padding: 12px 14px;
+      background: #fff;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      line-height: 1.5;
+    }
+    #status.loading { border-left: 4px solid #1976d2; }
+    #status.ready { border-left: 4px solid #2e7d32; }
+    #status.error { border-left: 4px solid #c62828; }
+    #pyodide-mpl-target {
+      min-height: 480px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      overflow: auto;
+    }
+    /* Matplotlib WebAgg のキャンバスがクリックを受け取れるようにする */
+    #pyodide-mpl-target canvas {
+      pointer-events: auto;
+      touch-action: none;
+    }
+    code { font-size: 0.92em; background: #f5f5f5; padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="status" class="loading">
+    準備中です。初回は NumPy / Matplotlib / SymPy のダウンロードに<strong>数十秒〜1分以上</strong>かかることがあります。
+    Chrome で「ページが応答しません」と出た場合は、処理が続いているだけなので<strong>「待機」</strong>を選んでください（異常終了ではありません）。
+  </div>
+  <div id="pyodide-mpl-target"></div>
+
+  <script>
+    const statusEl = document.getElementById("status");
+
+    function setStatus(msg, kind) {
+      statusEl.textContent = msg;
+      statusEl.className = kind || "loading";
+    }
+
+    /** メインスレッドを一度明け渡し、Chrome の「応答なし」ダイアログを出にくくする */
+    function yieldToBrowser() {
+      return new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      });
+    }
+
+    async function main() {
+      if (location.protocol === "file:") {
+        setStatus(
+          "このページは file:// では動作しません。プロジェクトのルートフォルダでターミナルを開き、次を実行してからブラウザで開いてください: python -m http.server 8000  →  http://localhost:8000/index.html",
+          "error"
+        );
+        return;
+      }
+
+      try {
+        setStatus("Pyodide を初期化しています…", "loading");
+        const pyodide = await loadPyodide();
+        await yieldToBrowser();
+
+        setStatus("パッケージ numpy, matplotlib, sympy を読み込み中（初回は時間がかかります）…", "loading");
+        await pyodide.loadPackage(["numpy", "matplotlib", "sympy"]);
+        await yieldToBrowser();
+
+        setStatus("epsilon_delta.py を取得しています…", "loading");
+        const pyPaths = ["epsilon_delta.py", "../epsilon_delta.py"];
+        let code = null;
+        let lastStatus = 0;
+        for (const p of pyPaths) {
+          const res = await fetch(p, { cache: "no-cache" });
+          if (res.ok) {
+            code = await res.text();
+            break;
+          }
+          lastStatus = res.status;
+        }
+        if (code == null) {
+          throw new Error(
+            "epsilon_delta.py を読み込めませんでした (HTTP " + lastStatus + ")。" +
+            " index.html と同じフォルダ、またはそのひとつ上に epsilon_delta.py があるか確認してください。"
+          );
+        }
+
+        setStatus(
+          "Python アプリを起動しています…（1〜2分かかることがあります。Chrome が「応答なし」と出たら「待機」で続行してください）",
+          "loading"
+        );
+        await yieldToBrowser();
+        await pyodide.runPythonAsync(code);
+
+        setStatus("起動しました。下のグラフと右側のスライダー・入力欄を操作できます。", "ready");
+      } catch (e) {
+        console.error(e);
+        setStatus("エラー: " + (e && e.message ? e.message : String(e)), "error");
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>
