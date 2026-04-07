@@ -27,7 +27,6 @@ def _sync_slider_from_num(slider_key: str, num_key: str) -> None:
     st.session_state[slider_key] = st.session_state[num_key]
 
 
-@st.cache_resource
 def get_visualizer() -> EpsilonDeltaVisualizer:
     return EpsilonDeltaVisualizer(streamlit_mode=True)
 
@@ -45,6 +44,8 @@ def _init_sidebar_state(viz: EpsilonDeltaVisualizer) -> None:
     st.session_state.sdelta_num = st.session_state.sdelta
     st.session_state.sb_num = st.session_state.sb
     st.session_state.func_expr_key = viz.initial_function_expr
+    st.session_state.view_xlim = tuple(viz.initial_xlim)
+    st.session_state.view_ylim = tuple(viz.initial_ylim)
 
 
 def _apply_pending_streamlit_mutations(viz: EpsilonDeltaVisualizer) -> None:
@@ -62,7 +63,8 @@ def _apply_pending_streamlit_mutations(viz: EpsilonDeltaVisualizer) -> None:
         st.session_state.sdelta_num = st.session_state.sdelta
         st.session_state.sb_num = st.session_state.sb
         st.session_state.func_expr_key = viz.initial_function_expr
-        viz.reset_to_initial(None)
+        st.session_state.view_xlim = tuple(viz.initial_xlim)
+        st.session_state.view_ylim = tuple(viz.initial_ylim)
 
 
 st.set_page_config(
@@ -86,6 +88,7 @@ st.markdown(
         header[data-testid="stHeader"] {display: none;}
         div[data-testid="stToolbar"] {display: none;}
         div[data-testid="stDecoration"] {display: none;}
+        div[data-testid="stAppDeployButton"] {display: none;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -97,6 +100,10 @@ st.caption("ブラウザのみで利用できます（学生側で Python のイ
 viz = get_visualizer()
 _init_sidebar_state(viz)
 _apply_pending_streamlit_mutations(viz)
+
+if "view_xlim" in st.session_state and "view_ylim" in st.session_state:
+    viz.ax.set_xlim(st.session_state.view_xlim)
+    viz.ax.set_ylim(st.session_state.view_ylim)
 
 # 既存セッションに数値入力用キーが無い場合の補完
 for _sk, _nk in (
@@ -233,15 +240,23 @@ with st.sidebar:
     with p0:
         if st.button("◀", help="左へ"):
             viz.pan_by_data(step_x, 0.0)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
     with p1:
         if st.button("▶", help="右へ"):
             viz.pan_by_data(-step_x, 0.0)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
     with p2:
         if st.button("▲", help="上へ"):
             viz.pan_by_data(0.0, -step_y)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
     with p3:
         if st.button("▼", help="下へ"):
             viz.pan_by_data(0.0, step_y)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
 
     if st.button("b を 0 に"):
         st.session_state._ed_b_zero = True
@@ -250,9 +265,13 @@ with st.sidebar:
     with z1:
         if st.button("拡大"):
             viz.zoom_in(None)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
     with z2:
         if st.button("縮小"):
             viz.zoom_out(None)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
     if st.button("リセット（初期値・表示範囲）"):
         st.session_state._ed_full_reset = True
         st.rerun()
@@ -263,5 +282,7 @@ viz.epsilon = float(st.session_state.seps)
 viz.delta = float(st.session_state.sdelta)
 viz.b = float(st.session_state.sb)
 viz.update_function(expr)
+st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+st.session_state.view_ylim = tuple(viz.ax.get_ylim())
 
 st.pyplot(viz.fig, use_container_width=True)
