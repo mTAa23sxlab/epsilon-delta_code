@@ -1,14 +1,5 @@
-contourpy==1.3.2
-cycler==0.12.1
-fonttools==4.58.4
-kiwisolver==1.4.8
-matplotlib==3.10.3
-mpmath==1.3.0
-numpy==2.3.0
-packaging==25.0
-pillow==11.2.1
-pyparsing==3.2.3
-python-dateutil==2.9.0.post0
-six==1.17.0
-sympy==1.14.0
-streamlit>=1.31.0,<2
+# Streamlit Community Cloud では依存を最小限にし、pip に互換解決を任せる
+streamlit>=1.31,<2
+numpy>=1.26
+matplotlib>=3.8
+sympy>=1.12
