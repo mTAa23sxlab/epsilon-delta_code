@@ -862,6 +862,167 @@ class EpsilonDeltaVisualizer:
                 x2 = self.a
 
         return x1, x2
+
+    def _add_compound_eps_patch(self, subpaths, alpha=0.3, zorder=3):
+        """重ならない複数多角形を1枚のパッチとして描画（二重 alpha や隙間を防ぐ）"""
+        vertices = []
+        codes = []
+        for verts in subpaths:
+            if len(verts) < 3:
+                continue
+            vertices.extend(verts)
+            codes.append(Path.MOVETO)
+            codes.extend([Path.LINETO] * (len(verts) - 1))
+            codes.append(Path.CLOSEPOLY)
+            vertices.append((0.0, 0.0))
+        if not codes:
+            return
+        self.ax.add_patch(
+            patches.PathPatch(
+                Path(vertices, codes),
+                facecolor=self.colors["accent"],
+                alpha=alpha,
+                edgecolor="none",
+                linewidth=0,
+                zorder=zorder,
+            )
+        )
+
+    def _build_d1_1_verts(self, f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing):
+        verts = []
+        x_curve = np.linspace(0, self.a, 500)
+        y_curve = self.evaluate_function(x_curve)
+        if is_increasing:
+            verts.append((0, f_a_minus_epsilon))
+            valid_mask = ~np.isnan(y_curve) & (y_curve >= f_a_minus_epsilon)
+            valid_indices = np.where(valid_mask)[0]
+            if len(valid_indices) > 0:
+                x_right = x_curve[valid_indices[-1]]
+                for i in valid_indices:
+                    if not np.isnan(y_curve[i]):
+                        verts.append((x_curve[i], y_curve[i]))
+                verts.append((x_right, f_a_minus_epsilon))
+                verts.append((self.a, f_a))
+            else:
+                verts.append((self.a, f_a_minus_epsilon))
+                verts.append((self.a, f_a))
+            verts.append((0, f_a))
+        else:
+            verts.append((0, f_a_plus_epsilon))
+            valid_mask = ~np.isnan(y_curve) & (y_curve <= f_a_plus_epsilon)
+            valid_indices = np.where(valid_mask)[0]
+            if len(valid_indices) > 0:
+                x_right = x_curve[valid_indices[-1]]
+                for i in valid_indices:
+                    if not np.isnan(y_curve[i]):
+                        verts.append((x_curve[i], y_curve[i]))
+                verts.append((x_right, f_a_plus_epsilon))
+                verts.append((self.a, f_a))
+            else:
+                verts.append((self.a, f_a_plus_epsilon))
+                verts.append((self.a, f_a))
+            verts.append((0, f_a))
+        return verts
+
+    def _build_d1_2_verts_b0(self, x2, f_a, f_a_plus_epsilon, f_a_minus_epsilon, is_increasing):
+        verts = []
+        if is_increasing:
+            verts.extend([(0, f_a), (self.a, f_a)])
+            if x2 > self.a:
+                x_start = self.a
+                x_candidates = np.linspace(self.a, x2, 1000)
+                y_candidates = self.evaluate_f_plus_b(x_candidates)
+                diff = y_candidates - f_a
+                diff_sign = np.sign(diff)
+                diff_sign[np.isnan(diff)] = 0
+                for i in np.where(np.diff(diff_sign) != 0)[0]:
+                    if i >= len(x_candidates) - 1:
+                        continue
+                    y1_i, y2_i = y_candidates[i], y_candidates[i + 1]
+                    if np.isnan(y1_i) or np.isnan(y2_i) or abs(y2_i - y1_i) <= 1e-10:
+                        continue
+                    t = (f_a - y1_i) / (y2_i - y1_i)
+                    x_intersect = x_candidates[i] + t * (x_candidates[i + 1] - x_candidates[i])
+                    if self.a <= x_intersect <= x2:
+                        x_start = x_intersect
+                        break
+                x_curve = np.linspace(x_start, x2, 100)
+                y_curve = self.evaluate_f_plus_b(x_curve)
+                for x, y in zip(x_curve, y_curve):
+                    if not np.isnan(y) and x_start <= x <= x2 and f_a <= y <= f_a_plus_epsilon:
+                        verts.append((x, y))
+            verts.extend([(x2, f_a_plus_epsilon), (0, f_a_plus_epsilon)])
+        else:
+            verts.extend([(0, f_a), (self.a, f_a)])
+            if x2 > self.a:
+                x_start = self.a
+                x_candidates = np.linspace(self.a, x2, 1000)
+                y_candidates = self.evaluate_f_plus_b(x_candidates)
+                diff = y_candidates - f_a
+                diff_sign = np.sign(diff)
+                diff_sign[np.isnan(diff)] = 0
+                for i in np.where(np.diff(diff_sign) != 0)[0]:
+                    if i >= len(x_candidates) - 1:
+                        continue
+                    y1_i, y2_i = y_candidates[i], y_candidates[i + 1]
+                    if np.isnan(y1_i) or np.isnan(y2_i) or abs(y2_i - y1_i) <= 1e-10:
+                        continue
+                    t = (f_a - y1_i) / (y2_i - y1_i)
+                    x_intersect = x_candidates[i] + t * (x_candidates[i + 1] - x_candidates[i])
+                    if self.a <= x_intersect <= x2:
+                        x_start = x_intersect
+                        break
+                x_curve = np.linspace(x_start, x2, 100)
+                y_curve = self.evaluate_f_plus_b(x_curve)
+                for x, y in zip(x_curve, y_curve):
+                    if not np.isnan(y) and x_start <= x <= x2 and f_a_minus_epsilon <= y <= f_a:
+                        verts.append((x, y))
+            verts.extend([(x2, f_a_minus_epsilon), (0, f_a_minus_epsilon)])
+        return verts
+
+    def _build_d2_1_verts_b0(self, x1, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing):
+        x_left = min(x1, self.a)
+        if x_left >= self.a - 1e-15:
+            return None
+        eps_y = f_a_minus_epsilon if is_increasing else f_a_plus_epsilon
+        return [(x_left, 0.0), (self.a, 0.0), (self.a, eps_y), (x_left, eps_y)]
+
+    def _build_d2_2_verts_b0(self, x2, f_a, is_increasing):
+        if x2 <= self.a + 1e-15:
+            return None
+        x0 = self.a
+        verts = [(x0, 0.0), (x2, 0.0)]
+        f_x2 = self.evaluate_f_plus_b(np.array([x2]))[0]
+        if np.isnan(f_x2):
+            f_x2 = 0.0
+        if is_increasing:
+            verts.append((x2, min(f_x2, f_a)))
+            xs = np.linspace(x0, x2, 1000)
+            ys = self.evaluate_f_plus_b(xs)
+            for x, y in zip(xs[::-1], ys[::-1]):
+                if not np.isnan(y) and y <= f_a + 1e-12:
+                    verts.append((float(x), float(y)))
+            verts.append((x0, f_a))
+        else:
+            verts.append((x2, max(f_x2, f_a)))
+            xs = np.linspace(x0, x2, 1000)
+            ys = self.evaluate_f_plus_b(xs)
+            for x, y in zip(xs[::-1], ys[::-1]):
+                if not np.isnan(y) and y >= f_a - 1e-12:
+                    verts.append((float(x), float(y)))
+            verts.append((x0, f_a))
+        return verts
+
+    def _draw_epsilon_regions_b0(
+        self, x1, x2, f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing
+    ):
+        subpaths = [
+            self._build_d1_1_verts(f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing),
+            self._build_d2_1_verts_b0(x1, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing),
+            self._build_d2_2_verts_b0(x2, f_a, is_increasing),
+            self._build_d1_2_verts_b0(x2, f_a, f_a_plus_epsilon, f_a_minus_epsilon, is_increasing),
+        ]
+        self._add_compound_eps_patch([p for p in subpaths if p and len(p) >= 3])
     
     def reset_to_initial(self, event=None):
         """初期状態に戻す"""
@@ -1441,54 +1602,26 @@ class EpsilonDeltaVisualizer:
         # 単調増加: x=0からx=aまでの範囲で、y=f(a)-εからy=f(a)までの領域
         # 単調減少: x=0からx=aまでの範囲で、y=f(a)からy=f(a)+εまでの領域（x軸基準で反転）
         if x1 is not None and x2 is not None:
-            # D1_1領域の頂点を定義
-            d1_1_verts = []
-
-            x_curve_d1_1 = np.linspace(0, self.a, 500)
-            y_curve_d1_1 = self.evaluate_function(x_curve_d1_1)
-
-            if is_increasing:
-                d1_1_verts.append((0, f_a_minus_epsilon))
-                valid_mask = ~np.isnan(y_curve_d1_1) & (y_curve_d1_1 >= f_a_minus_epsilon)
-                valid_indices = np.where(valid_mask)[0]
-                if len(valid_indices) > 0:
-                    x_right = x_curve_d1_1[valid_indices[-1]]
-                    for i in valid_indices:
-                        if not np.isnan(y_curve_d1_1[i]):
-                            d1_1_verts.append((x_curve_d1_1[i], y_curve_d1_1[i]))
-                    d1_1_verts.append((x_right, f_a_minus_epsilon))
-                    d1_1_verts.append((self.a, f_a))
-                else:
-                    d1_1_verts.append((self.a, f_a_minus_epsilon))
-                    d1_1_verts.append((self.a, f_a))
-                d1_1_verts.append((0, f_a))
+            if abs(self.b) < 1e-12:
+                self._draw_epsilon_regions_b0(
+                    x1, x2, f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing
+                )
             else:
-                d1_1_verts.append((0, f_a_plus_epsilon))
-                valid_mask = ~np.isnan(y_curve_d1_1) & (y_curve_d1_1 <= f_a_plus_epsilon)
-                valid_indices = np.where(valid_mask)[0]
-                if len(valid_indices) > 0:
-                    x_right = x_curve_d1_1[valid_indices[-1]]
-                    for i in valid_indices:
-                        if not np.isnan(y_curve_d1_1[i]):
-                            d1_1_verts.append((x_curve_d1_1[i], y_curve_d1_1[i]))
-                    d1_1_verts.append((x_right, f_a_plus_epsilon))
-                    d1_1_verts.append((self.a, f_a))
-                else:
-                    d1_1_verts.append((self.a, f_a_plus_epsilon))
-                    d1_1_verts.append((self.a, f_a))
-                d1_1_verts.append((0, f_a))
+                d1_1_verts = self._build_d1_1_verts(
+                    f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing
+                )
+                if len(d1_1_verts) > 2:
+                    d1_1_path = Path(d1_1_verts)
+                    d1_1_patch = patches.PathPatch(
+                        d1_1_path,
+                        facecolor=self.colors["accent"],
+                        alpha=0.3,
+                        edgecolor="none",
+                        linewidth=0,
+                    )
+                    self.ax.add_patch(d1_1_patch)
 
-            # D1_1領域を描画
-            if len(d1_1_verts) > 2:
-                d1_1_path = Path(d1_1_verts)
-                d1_1_patch = patches.PathPatch(d1_1_path, facecolor=self.colors['accent'], 
-                                             alpha=0.3, edgecolor='none', 
-                                             linewidth=0)
-                self.ax.add_patch(d1_1_patch)
-                # D1_1領域のラベル
-                # self.add_region_label(d1_1_verts, 'D1_1', color=self.colors['accent'], position='top_left')
-
-        _draw_d2_d1_2 = x1 is not None and x2 is not None
+        _draw_d2_d1_2 = x1 is not None and x2 is not None and abs(self.b) >= 1e-12
 
         # D5領域の作成（D2より手前に描画）
         # 説明: 不連続点x=aの右側で、関数f(x)+bがf(a)と交わる点までの矩形領域
@@ -1577,28 +1710,18 @@ class EpsilonDeltaVisualizer:
             # ⑤: (a, f_a)
             # ⑥: (a, 0)
             if x_min < self.a:
-                if is_increasing:
-                    d2_1_verts = [(x_min, 0), (self.a, 0), (self.a, f_a_minus_epsilon)]
-                    if x_min < x1 - 1e-12:
-                        d2_1_verts.append((x1, f_a_minus_epsilon))
-                        x_curve_d2_1 = np.linspace(x1, x_min, 500)
-                        y_curve_d2_1 = self.evaluate_function(x_curve_d2_1)
-                        for x, y in zip(x_curve_d2_1, y_curve_d2_1):
-                            if not np.isnan(y) and y <= f_a_minus_epsilon + 1e-12:
-                                d2_1_verts.append((float(x), float(y)))
-                    else:
-                        d2_1_verts.append((x_min, f_a_minus_epsilon))
-                else:
-                    d2_1_verts = [(x_min, 0), (self.a, 0), (self.a, f_a_plus_epsilon)]
-                    if x_min < x1 - 1e-12:
-                        d2_1_verts.append((x1, f_a_plus_epsilon))
-                        x_curve_d2_1 = np.linspace(x1, x_min, 500)
-                        y_curve_d2_1 = self.evaluate_function(x_curve_d2_1)
-                        for x, y in zip(x_curve_d2_1, y_curve_d2_1):
-                            if not np.isnan(y) and y >= f_a_plus_epsilon - 1e-12:
-                                d2_1_verts.append((float(x), float(y)))
-                    else:
-                        d2_1_verts.append((x_min, f_a_plus_epsilon))
+                x_curve_d2_1 = np.linspace(x_min, self.a, 1000)
+                y_curve_d2_1 = self.evaluate_function(x_curve_d2_1)
+
+                d2_1_verts = []
+                d2_1_verts.append((x_min, 0))
+                d2_1_verts.append((self.a, 0))
+                d2_1_verts.append((self.a, f_a))
+                for i in range(len(x_curve_d2_1)-1, -1, -1):
+                    x, y = x_curve_d2_1[i], y_curve_d2_1[i]
+                    if not np.isnan(y):
+                        if (is_increasing and y >= 0) or (not is_increasing and y <= 0):
+                            d2_1_verts.append((x, y))
 
                 if len(d2_1_verts) > 2:
                     d2_1_path = Path(d2_1_verts)
@@ -1663,36 +1786,32 @@ class EpsilonDeltaVisualizer:
                 d2_2_verts = []
                 
                 if is_increasing:
-                    y_top_right = min(f_x_max_plus_b, f_a)
-                    y_top_left = min(y0_d2, f_a)
                     d2_2_verts.append((x0_d2, 0))
                     d2_2_verts.append((x_max, 0))
-                    d2_2_verts.append((x_max, y_top_right))
+                    d2_2_verts.append((x_max, f_x_max_plus_b))
                     if x_max > x0_d2:
                         x_curve_d2_2 = np.linspace(x0_d2, x_max, 1000)
                         y_curve_d2_2 = self.evaluate_f_plus_b(x_curve_d2_2)
                         for i in range(len(x_curve_d2_2)-1, -1, -1):
                             x, y = x_curve_d2_2[i], y_curve_d2_2[i]
-                            if not np.isnan(y) and 0 <= y <= f_a:
+                            if not np.isnan(y) and y >= 0:
                                 d2_2_verts.append((x, y))
                     if x0_d2 < x_max:
-                        d2_2_verts.append((x0_d2, y_top_left))
+                        d2_2_verts.append((x0_d2, y0_d2))
                 else:
-                    y_top_right = max(f_x_max_plus_b, f_a)
-                    y_top_left = max(y0_d2, f_a)
                     x_curve_d2_2 = np.linspace(x0_d2, x_max, 1000)
                     y_curve_d2_2 = self.evaluate_f_plus_b(x_curve_d2_2)
 
                     d2_2_verts.append((x0_d2, 0))
                     d2_2_verts.append((x_max, 0))
-                    d2_2_verts.append((x_max, y_top_right))
+                    d2_2_verts.append((x_max, f_x_max_plus_b))
                     if x_max > x0_d2:
                         for i in range(len(x_curve_d2_2)-1, -1, -1):
                             x, y = x_curve_d2_2[i], y_curve_d2_2[i]
-                            if not np.isnan(y) and f_a <= y:
+                            if not np.isnan(y) and y <= 0:
                                 d2_2_verts.append((x, y))
                     if x0_d2 < x_max:
-                        d2_2_verts.append((x0_d2, y_top_left))
+                        d2_2_verts.append((x0_d2, y0_d2))
                 
                 if len(d2_2_verts) > 2:
                     d2_2_path = Path(d2_2_verts)
