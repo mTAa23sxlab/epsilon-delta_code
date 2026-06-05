@@ -32,9 +32,9 @@ def get_visualizer() -> EpsilonDeltaVisualizer:
 
 
 def _init_sidebar_state(viz: EpsilonDeltaVisualizer) -> None:
-    if "epsilon_delta_ui_v1" in st.session_state:
+    if "epsilon_delta_ui_v2" in st.session_state:
         return
-    st.session_state.epsilon_delta_ui_v1 = True
+    st.session_state.epsilon_delta_ui_v2 = True
     st.session_state.sa = float(viz.initial_a)
     st.session_state.seps = float(viz.initial_epsilon)
     st.session_state.sdelta = float(viz.initial_delta)
@@ -158,19 +158,19 @@ with st.sidebar:
 
     st.slider(
         "δ（スライダー）",
-        min_value=0.001,
-        max_value=2.0,
-        step=0.001,
-        format="%.3f",
+        min_value=0.0001,
+        max_value=1.0,
+        step=0.0001,
+        format="%.4f",
         key="sdelta",
         on_change=partial(_sync_num_from_slider, "sdelta", "sdelta_num"),
     )
     st.number_input(
         "δ（数値入力）",
-        min_value=0.001,
-        max_value=2.0,
-        step=0.001,
-        format="%.3f",
+        min_value=0.0001,
+        max_value=1.0,
+        step=0.0001,
+        format="%.4f",
         key="sdelta_num",
         on_change=partial(_sync_slider_from_num, "sdelta", "sdelta_num"),
     )
