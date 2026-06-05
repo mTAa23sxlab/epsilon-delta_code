@@ -981,36 +981,45 @@ class EpsilonDeltaVisualizer:
         return verts
 
     def _build_d2_1_verts_b0(self, x1, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing):
+        """P2: (x1,0)→(a,0)→(a,f(a))→曲線→(x1,f(a)∓ε) = D2_1"""
         x_left = min(x1, self.a)
         if x_left >= self.a - 1e-15:
             return None
-        eps_y = f_a_minus_epsilon if is_increasing else f_a_plus_epsilon
-        return [(x_left, 0.0), (self.a, 0.0), (self.a, eps_y), (x_left, eps_y)]
+        f_a = float(self.evaluate_function(np.array([self.a]))[0])
+        verts = [(x_left, 0.0), (self.a, 0.0), (self.a, f_a)]
+        x_curve = np.linspace(self.a, x_left, 1000)
+        y_curve = self.evaluate_function(x_curve)
+        for i in range(len(x_curve) - 1, -1, -1):
+            x, y = x_curve[i], y_curve[i]
+            if np.isnan(y):
+                continue
+            if is_increasing and y >= 0:
+                verts.append((float(x), float(y)))
+            elif not is_increasing and y <= 0:
+                verts.append((float(x), float(y)))
+        return verts
 
     def _build_d2_2_verts_b0(self, x2, f_a, is_increasing):
+        """P3: (a,0)→(x2,0)→(x2,f(x2))→曲線→(a,f(a)) = D2_2"""
         if x2 <= self.a + 1e-15:
             return None
         x0 = self.a
-        verts = [(x0, 0.0), (x2, 0.0)]
         f_x2 = self.evaluate_f_plus_b(np.array([x2]))[0]
         if np.isnan(f_x2):
             f_x2 = 0.0
-        if is_increasing:
-            verts.append((x2, min(f_x2, f_a)))
-            xs = np.linspace(x0, x2, 1000)
-            ys = self.evaluate_f_plus_b(xs)
-            for x, y in zip(xs[::-1], ys[::-1]):
-                if not np.isnan(y) and y <= f_a + 1e-12:
+        verts = [(x0, 0.0), (x2, 0.0), (x2, float(f_x2))]
+        if x2 > x0:
+            x_curve = np.linspace(x0, x2, 1000)
+            y_curve = self.evaluate_f_plus_b(x_curve)
+            for i in range(len(x_curve) - 1, -1, -1):
+                x, y = x_curve[i], y_curve[i]
+                if np.isnan(y):
+                    continue
+                if is_increasing and y >= 0:
                     verts.append((float(x), float(y)))
-            verts.append((x0, f_a))
-        else:
-            verts.append((x2, max(f_x2, f_a)))
-            xs = np.linspace(x0, x2, 1000)
-            ys = self.evaluate_f_plus_b(xs)
-            for x, y in zip(xs[::-1], ys[::-1]):
-                if not np.isnan(y) and y >= f_a - 1e-12:
+                elif not is_increasing and y <= 0:
                     verts.append((float(x), float(y)))
-            verts.append((x0, f_a))
+        verts.append((x0, f_a))
         return verts
 
     def _draw_epsilon_regions_b0(
