@@ -34,8 +34,14 @@ class EpsilonDeltaVisualizer:
         # 現代的なスタイル設定
         self.setup_modern_style()
         
-        self.fig, self.ax = plt.subplots(figsize=(16, 10))
+        if streamlit_mode:
+            self.fig, self.ax = plt.subplots(figsize=(10, 7), dpi=100)
+        else:
+            self.fig, self.ax = plt.subplots(figsize=(16, 10))
         plt.subplots_adjust(left=0.06, bottom=0.1, right=0.58, top=0.95)
+        self._cached_expr = None
+        self._cached_f = None
+        self._draw_axes_state = None
         
         # 初期値の設定
         self.a = 1.0
@@ -382,13 +388,19 @@ class EpsilonDeltaVisualizer:
             self._refresh_data_after_pan_or_zoom()
         self.pan_start = None
         
+    def _get_base_f(self):
+        """sympify / lambdify の結果をキャッシュ（毎回の再パースを避ける）"""
+        if self._cached_expr != self.function_expr or self._cached_f is None:
+            x_sym = sp.Symbol('x')
+            expr = sp.sympify(self.function_expr)
+            self._cached_expr = self.function_expr
+            self._cached_f = sp.lambdify(x_sym, expr, 'numpy')
+        return self._cached_f
+
     def evaluate_function(self, x):
         """関数を評価する（f(x) = {f(x) (x≤a), f(x)+b (x>a)}）"""
         try:
-            # sympyを使用して関数を評価
-            x_sym = sp.Symbol('x')
-            expr = sp.sympify(self.function_expr)
-            f = sp.lambdify(x_sym, expr, 'numpy')
+            f = self._get_base_f()
             result = f(x)
             
             # スカラーの場合は配列に変換
@@ -429,10 +441,7 @@ class EpsilonDeltaVisualizer:
     def evaluate_f(self, x):
         """f(x)を評価する（x <= aの部分）"""
         try:
-            x_sym = sp.Symbol('x')
-            expr = sp.sympify(self.function_expr)
-            f = sp.lambdify(x_sym, expr, 'numpy')
-            return f(x)
+            return self._get_base_f()(x)
         except:
             return np.zeros_like(x)
     
@@ -530,10 +539,7 @@ class EpsilonDeltaVisualizer:
     def evaluate_f_plus_b(self, x):
         """f(x)+bを評価する（x >= aの部分）"""
         try:
-            x_sym = sp.Symbol('x')
-            expr = sp.sympify(self.function_expr)
-            f = sp.lambdify(x_sym, expr, 'numpy')
-            result = f(x)
+            result = self._get_base_f()(x)
             # bが0に近い場合は0として扱う（数値精度の問題を回避）
             b_value = 0.0 if abs(self.b) < 1e-12 else self.b
             
@@ -587,6 +593,8 @@ class EpsilonDeltaVisualizer:
         x_max = xlim[1] + margin
         # 解像度を維持（範囲に応じて点数を調整）
         num_points = max(1000, int((x_max - x_min) * 200))
+        if self._streamlit_mode:
+            num_points = min(num_points, 1000)
         new_x = np.linspace(x_min, x_max, num_points)
         # サイズが変わった場合のみ更新（パフォーマンス向上）
         if len(self.x) != len(new_x) or not np.allclose(self.x, new_x, rtol=1e-10):
@@ -594,6 +602,16 @@ class EpsilonDeltaVisualizer:
     
     def draw_axes(self):
         """x軸とy軸を確実に描画"""
+        xlim = self.ax.get_xlim()
+        ylim = self.ax.get_ylim()
+        axes_state = (
+            round(xlim[0], 6), round(xlim[1], 6),
+            round(ylim[0], 6), round(ylim[1], 6),
+        )
+        if self._draw_axes_state == axes_state:
+            return
+        self._draw_axes_state = axes_state
+
         # 既存の軸線を削除
         if self.x_axis_line is not None:
             try:
@@ -632,10 +650,6 @@ class EpsilonDeltaVisualizer:
                     tick_line.remove()
                 except:
                     pass
-        
-        # x軸とy軸を再描画
-        ylim = self.ax.get_ylim()
-        xlim = self.ax.get_xlim()
         
         # 目盛りの基本設定
         # x軸（y=0）とy軸（x=0）にメモリ（目盛り）を表示
@@ -819,8 +833,8 @@ class EpsilonDeltaVisualizer:
     
     def find_intersections(self, target_y, min_x=-3, max_x=3, jump_exclude=False):
         """関数と水平線の交点を求める（jump_exclude=Trueなら不連続点x=aをまたぐ交点は除外）"""
-        # 高精度で交点を求めるため、より細かいグリッドを使用
-        x = np.linspace(min_x, max_x, 5000)  # 1000から5000に増加
+        num_points = 1500 if self._streamlit_mode else 5000
+        x = np.linspace(min_x, max_x, num_points)
         y = self.evaluate_function(x)
         
         # NaN値を処理（sqrt(x)などでx<0の場合）
@@ -1221,52 +1235,38 @@ class EpsilonDeltaVisualizer:
     
     def update_function(self, text):
         """関数を更新"""
-        # 関数式を更新
-        old_expr = self.function_expr
-        try:
-            # 新しい関数式が有効かチェック
-            x_sym = sp.Symbol('x')
-            expr = sp.sympify(text)
-            test_f = sp.lambdify(x_sym, expr, 'numpy')
-            test_result = test_f(np.array([0.0]))
-            
-            # 有効な場合のみ更新
-            self.function_expr = text
-        except:
-            # 無効な場合は元に戻す
-            self.function_expr = old_expr
-            if not self._streamlit_mode:
-                self.func_text.set_val(old_expr)
-            return
-        
-        # 現在の表示範囲に応じてxデータを更新
-        self.update_x_data()
-        
-        # f(x)とf(x)+bの線を更新
-        # x <= aの部分（f(x)）- aの点を含める
-        x_f = self.x[self.x <= self.a]
-        if len(x_f) > 0 and x_f[-1] < self.a:
-            # aの点を確実に含める
-            x_f = np.append(x_f, self.a)
-        y_f = self.evaluate_f(x_f)
-        self.line_f.set_xdata(x_f)
-        self.line_f.set_ydata(y_f)
-        
-        # x >= aの部分（f(x)+b）- aの点を含める
-        x_f_plus_b = self.x[self.x >= self.a]
-        if len(x_f_plus_b) > 0 and x_f_plus_b[0] > self.a:
-            # aの点を確実に含める
-            x_f_plus_b = np.insert(x_f_plus_b, 0, self.a)
-        y_f_plus_b = self.evaluate_f_plus_b(x_f_plus_b)
-        self.line_f_plus_b.set_xdata(x_f_plus_b)
-        self.line_f_plus_b.set_ydata(y_f_plus_b)
-        
-        # 全体の関数（後方互換性のため）
-        self.y = self.evaluate_function(self.x)
-        self.line.set_xdata(self.x)
-        self.line.set_ydata(self.y)
-        
-        # グラフを更新（範囲やbの値は保持される）
+        if text != self.function_expr:
+            old_expr = self.function_expr
+            try:
+                x_sym = sp.Symbol('x')
+                expr = sp.sympify(text)
+                test_f = sp.lambdify(x_sym, expr, 'numpy')
+                test_f(np.array([0.0]))
+                self.function_expr = text
+                self._cached_expr = None
+            except Exception:
+                self.function_expr = old_expr
+                if not self._streamlit_mode:
+                    self.func_text.set_val(old_expr)
+                return
+
+            self.update_x_data()
+            x_f = self.x[self.x <= self.a]
+            if len(x_f) > 0 and x_f[-1] < self.a:
+                x_f = np.append(x_f, self.a)
+            y_f = self.evaluate_f(x_f)
+            self.line_f.set_xdata(x_f)
+            self.line_f.set_ydata(y_f)
+            x_f_plus_b = self.x[self.x >= self.a]
+            if len(x_f_plus_b) > 0 and x_f_plus_b[0] > self.a:
+                x_f_plus_b = np.insert(x_f_plus_b, 0, self.a)
+            y_f_plus_b = self.evaluate_f_plus_b(x_f_plus_b)
+            self.line_f_plus_b.set_xdata(x_f_plus_b)
+            self.line_f_plus_b.set_ydata(y_f_plus_b)
+            self.y = self.evaluate_function(self.x)
+            self.line.set_xdata(self.x)
+            self.line.set_ydata(self.y)
+
         self.update(None)
         self.fig.canvas.draw_idle()
     
@@ -1311,16 +1311,25 @@ class EpsilonDeltaVisualizer:
                 # xデータを更新する必要がある
                 self.update_x_data()
         
-        # 既存の要素をクリア（関数の線とグリッド線以外）
-        for artist in self.ax.collections + self.ax.patches + self.ax.texts:
+        protected_lines = {self.line, self.line_f, self.line_f_plus_b}
+        if self.x_axis_line is not None:
+            protected_lines.add(self.x_axis_line)
+        if self.y_axis_line is not None:
+            protected_lines.add(self.y_axis_line)
+        protected_lines.update(getattr(self, "x_axis_ticks", []))
+        protected_lines.update(getattr(self, "y_axis_ticks", []))
+        protected_texts = set(
+            getattr(self, "x_axis_labels", []) + getattr(self, "y_axis_labels", [])
+        )
+
+        # 既存の要素をクリア（関数の線・軸ラベル以外）
+        for artist in self.ax.collections + self.ax.patches:
             artist.remove()
-        
-        # 関数の線以外の線を削除
-        lines_to_remove = []
-        for line in self.ax.lines:
-            if line != self.line and line != self.line_f and line != self.line_f_plus_b:
-                lines_to_remove.append(line)
-        
+        for artist in self.ax.texts:
+            if artist not in protected_texts:
+                artist.remove()
+
+        lines_to_remove = [line for line in self.ax.lines if line not in protected_lines]
         for line in lines_to_remove:
             line.remove()
         
