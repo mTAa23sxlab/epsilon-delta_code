@@ -1577,18 +1577,28 @@ class EpsilonDeltaVisualizer:
             # ⑤: (a, f_a)
             # ⑥: (a, 0)
             if x_min < self.a:
-                x_curve_d2_1 = np.linspace(x_min, self.a, 1000)
-                y_curve_d2_1 = self.evaluate_function(x_curve_d2_1)
-
-                d2_1_verts = []
-                d2_1_verts.append((x_min, 0))
-                d2_1_verts.append((self.a, 0))
-                d2_1_verts.append((self.a, f_a))
-                for i in range(len(x_curve_d2_1)-1, -1, -1):
-                    x, y = x_curve_d2_1[i], y_curve_d2_1[i]
-                    if not np.isnan(y):
-                        if (is_increasing and y >= 0) or (not is_increasing and y <= 0):
-                            d2_1_verts.append((x, y))
+                if is_increasing:
+                    d2_1_verts = [(x_min, 0), (self.a, 0), (self.a, f_a_minus_epsilon)]
+                    if x_min < x1 - 1e-12:
+                        d2_1_verts.append((x1, f_a_minus_epsilon))
+                        x_curve_d2_1 = np.linspace(x1, x_min, 500)
+                        y_curve_d2_1 = self.evaluate_function(x_curve_d2_1)
+                        for x, y in zip(x_curve_d2_1, y_curve_d2_1):
+                            if not np.isnan(y) and y <= f_a_minus_epsilon + 1e-12:
+                                d2_1_verts.append((float(x), float(y)))
+                    else:
+                        d2_1_verts.append((x_min, f_a_minus_epsilon))
+                else:
+                    d2_1_verts = [(x_min, 0), (self.a, 0), (self.a, f_a_plus_epsilon)]
+                    if x_min < x1 - 1e-12:
+                        d2_1_verts.append((x1, f_a_plus_epsilon))
+                        x_curve_d2_1 = np.linspace(x1, x_min, 500)
+                        y_curve_d2_1 = self.evaluate_function(x_curve_d2_1)
+                        for x, y in zip(x_curve_d2_1, y_curve_d2_1):
+                            if not np.isnan(y) and y >= f_a_plus_epsilon - 1e-12:
+                                d2_1_verts.append((float(x), float(y)))
+                    else:
+                        d2_1_verts.append((x_min, f_a_plus_epsilon))
 
                 if len(d2_1_verts) > 2:
                     d2_1_path = Path(d2_1_verts)
@@ -1653,32 +1663,36 @@ class EpsilonDeltaVisualizer:
                 d2_2_verts = []
                 
                 if is_increasing:
+                    y_top_right = min(f_x_max_plus_b, f_a)
+                    y_top_left = min(y0_d2, f_a)
                     d2_2_verts.append((x0_d2, 0))
                     d2_2_verts.append((x_max, 0))
-                    d2_2_verts.append((x_max, f_x_max_plus_b))
+                    d2_2_verts.append((x_max, y_top_right))
                     if x_max > x0_d2:
                         x_curve_d2_2 = np.linspace(x0_d2, x_max, 1000)
                         y_curve_d2_2 = self.evaluate_f_plus_b(x_curve_d2_2)
                         for i in range(len(x_curve_d2_2)-1, -1, -1):
                             x, y = x_curve_d2_2[i], y_curve_d2_2[i]
-                            if not np.isnan(y) and y >= 0:
+                            if not np.isnan(y) and 0 <= y <= f_a:
                                 d2_2_verts.append((x, y))
                     if x0_d2 < x_max:
-                        d2_2_verts.append((x0_d2, y0_d2))
+                        d2_2_verts.append((x0_d2, y_top_left))
                 else:
+                    y_top_right = max(f_x_max_plus_b, f_a)
+                    y_top_left = max(y0_d2, f_a)
                     x_curve_d2_2 = np.linspace(x0_d2, x_max, 1000)
                     y_curve_d2_2 = self.evaluate_f_plus_b(x_curve_d2_2)
 
                     d2_2_verts.append((x0_d2, 0))
                     d2_2_verts.append((x_max, 0))
-                    d2_2_verts.append((x_max, f_x_max_plus_b))
+                    d2_2_verts.append((x_max, y_top_right))
                     if x_max > x0_d2:
                         for i in range(len(x_curve_d2_2)-1, -1, -1):
                             x, y = x_curve_d2_2[i], y_curve_d2_2[i]
-                            if not np.isnan(y) and y <= 0:
+                            if not np.isnan(y) and f_a <= y:
                                 d2_2_verts.append((x, y))
                     if x0_d2 < x_max:
-                        d2_2_verts.append((x0_d2, y0_d2))
+                        d2_2_verts.append((x0_d2, y_top_left))
                 
                 if len(d2_2_verts) > 2:
                     d2_2_path = Path(d2_2_verts)
