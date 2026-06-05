@@ -245,6 +245,14 @@ class EpsilonDeltaVisualizer:
         """縮小ボタン"""
         self._zoom_viewport(1 / 1.08)
 
+    def zoom_in_fast(self, event):
+        """10倍拡大ボタン"""
+        self._zoom_viewport(10.0)
+
+    def zoom_out_fast(self, event):
+        """10倍縮小ボタン"""
+        self._zoom_viewport(0.1)
+
     def on_press(self, event):
         """マウスボタン押下"""
         if event.inaxes != self.ax:
@@ -707,7 +715,7 @@ class EpsilonDeltaVisualizer:
             margin = (xlim[1] - xlim[0]) * 0.25
             min_x = max(min_x, xlim[0] - margin)
             max_x = min(max_x, xlim[1] + margin)
-            num_points = 800
+            num_points = 5000 if self.epsilon < 0.05 else 800
         else:
             num_points = 5000
         x = np.linspace(min_x, max_x, num_points)
@@ -746,6 +754,114 @@ class EpsilonDeltaVisualizer:
                     intersections.append((x_intersect, target_y))
         
         return intersections
+
+    def _compute_x1_x2(self, f_a, is_increasing, target_y_for_x1, target_y_for_x2):
+        """ε に対応する x1 (<a), x2 (>=a) を求める（小さい ε でも安定）"""
+        x1 = None
+        x2 = None
+        b_val = 0.0 if abs(self.b) < 1e-12 else self.b
+
+        try:
+            x_sym = sp.Symbol("x")
+            expr = sp.sympify(self.function_expr)
+            normalized = self.function_expr.replace(" ", "")
+
+            if expr.equals(x_sym ** 2) or normalized in ("x**2", "x^2"):
+                if f_a - self.epsilon >= 0:
+                    x1 = float(np.sqrt(f_a - self.epsilon))
+                inner = target_y_for_x2 - b_val
+                x2 = float(np.sqrt(max(0.0, inner))) if inner >= 0 else self.a
+            elif expr.equals(x_sym):
+                x1 = target_y_for_x1 - b_val
+                x2 = target_y_for_x2 - b_val
+            elif expr.equals(sp.sqrt(x_sym)):
+                inner1 = target_y_for_x1 - b_val
+                x1 = float(inner1 ** 2) if inner1 >= 0 else None
+                inner2 = target_y_for_x2 - b_val
+                x2 = float(inner2 ** 2) if inner2 >= 0 else self.a
+            else:
+                diff_from_x = sp.simplify(expr - x_sym)
+                if diff_from_x.is_number:
+                    c = float(diff_from_x)
+                    x1 = target_y_for_x1 - c
+                    if is_increasing:
+                        x2 = self.a + self.epsilon - self.b
+                    else:
+                        x2 = self.a - self.epsilon - self.b
+                else:
+                    diff_from_neg_x = sp.simplify(expr + x_sym)
+                    if diff_from_neg_x.is_number:
+                        c = float(diff_from_neg_x)
+                        x1 = target_y_for_x1 + c
+                        if is_increasing:
+                            x2 = self.a + self.epsilon - self.b
+                        else:
+                            x2 = self.a + self.epsilon + self.b
+                    else:
+                        diff_from_sqrt = sp.simplify(expr - sp.sqrt(x_sym))
+                        if diff_from_sqrt.is_number:
+                            sqrt_a = np.sqrt(self.a) if self.a >= 0 else 0.0
+                            inner1 = target_y_for_x1 - b_val
+                            x1 = float(inner1 ** 2) if inner1 >= 0 else None
+                            if is_increasing:
+                                sqrt_arg = sqrt_a + self.epsilon - self.b
+                            else:
+                                sqrt_arg = sqrt_a - self.epsilon - self.b
+                            x2 = float(sqrt_arg ** 2) if sqrt_arg >= 0 else self.a
+        except Exception:
+            pass
+
+        if x1 is not None and x1 >= self.a:
+            x1 = None
+        if x2 is not None and x2 < self.a:
+            x2 = self.a
+
+        if x1 is None:
+            if self._streamlit_mode:
+                xlim = self.ax.get_xlim()
+                ix_margin = (xlim[1] - xlim[0]) * 0.5
+                ix_min = xlim[0] - ix_margin
+                ix_max = xlim[1] + ix_margin
+            else:
+                ix_min, ix_max = -3, 3
+            intersections_for_x1 = self.find_intersections(
+                target_y_for_x1, ix_min, ix_max, jump_exclude=True
+            )
+            if intersections_for_x1:
+                x_candidates = [x for x, _y in intersections_for_x1 if x < self.a]
+                if x_candidates:
+                    x1 = min(x_candidates, key=lambda x: abs(x - self.a))
+                else:
+                    x1 = min(intersections_for_x1, key=lambda p: abs(p[0] - self.a))[0]
+
+        if x2 is None:
+            search_max = max(3.0, self.a + abs(self.epsilon) + abs(self.b) + 1.0)
+            if self.epsilon < 0.05:
+                search_max = max(search_max, self.a + max(0.01, 10 * self.epsilon))
+            x_candidates_x2 = np.linspace(self.a, search_max, 8000 if self.epsilon < 0.05 else 5000)
+            y_fx_plus_b_x2 = self.evaluate_f_plus_b(x_candidates_x2)
+            diff_x2 = y_fx_plus_b_x2 - target_y_for_x2
+            diff_x2_sign = np.sign(diff_x2)
+            diff_x2_sign[np.isnan(diff_x2)] = 0
+            crossings_x2 = np.where(np.diff(diff_x2_sign) != 0)[0]
+            intersections_x2 = []
+            for i in crossings_x2:
+                if i >= len(x_candidates_x2) - 1:
+                    continue
+                x_lo, x_hi = x_candidates_x2[i], x_candidates_x2[i + 1]
+                y_lo, y_hi = y_fx_plus_b_x2[i], y_fx_plus_b_x2[i + 1]
+                if np.isnan(y_lo) or np.isnan(y_hi) or abs(y_hi - y_lo) <= 1e-12:
+                    continue
+                t = (target_y_for_x2 - y_lo) / (y_hi - y_lo)
+                x_intersect = x_lo + t * (x_hi - x_lo)
+                if x_intersect >= self.a:
+                    intersections_x2.append(x_intersect)
+            if intersections_x2:
+                x2 = min(intersections_x2, key=lambda x: abs(x - self.a))
+            else:
+                x2 = self.a
+
+        return x1, x2
     
     def reset_to_initial(self, event=None):
         """初期状態に戻す"""
@@ -1287,194 +1403,27 @@ class EpsilonDeltaVisualizer:
             target_y_for_x1 = f_a_minus_epsilon
             target_y_for_x2 = f_a_plus_epsilon
         else:
-            # 単調減少の場合
             target_y_for_x1 = f_a_plus_epsilon
             target_y_for_x2 = f_a_minus_epsilon
-        
-        if self._streamlit_mode:
-            xlim = self.ax.get_xlim()
-            ix_margin = (xlim[1] - xlim[0]) * 0.5
-            ix_min = xlim[0] - ix_margin
-            ix_max = xlim[1] + ix_margin
-        else:
-            ix_min, ix_max = -3, 3
-        intersections_for_x1 = self.find_intersections(
-            target_y_for_x1, ix_min, ix_max, jump_exclude=True
-        )
-        
-        # x2: 関数f(x)+bと水平線y=target_y_for_x2の交点
-        # f(x)+b = target_y_for_x2 を満たすx座標（x >= aの範囲で）
-        x2 = None
-        
-        # 特殊な関数の場合、解析的にx2を計算
-        # ただし、x >= aの範囲でのみ有効
-        try:
-            x_sym = sp.Symbol('x')
-            expr = sp.sympify(self.function_expr)
-            # 関数がxまたはx+定数と等しいかチェック (x, x+1, x-1 など)
-            # x+cの形式を検出
-            diff_from_x = sp.simplify(expr - x_sym)
-            if diff_from_x.is_number:
-                if is_increasing:
-                    # f(x)+b = x+c+b = f(a)+ε = a+c+ε → x = a+ε-b
-                    x2_calculated = self.a + self.epsilon - self.b
-                else:
-                    # f(x)+b = x+c+b = f(a)-ε = a+c-ε → x = a-ε-b
-                    x2_calculated = self.a - self.epsilon - self.b
-                if x2_calculated >= self.a:
-                    x2 = x2_calculated
-                else:
-                    # bがεを超えた場合、x2 = aに設定
-                    x2 = self.a
-            # 関数が-x+定数の場合を検出 (-x, -x+1, -x-1 など)
-            else:
-                diff_from_neg_x = sp.simplify(expr + x_sym)
-                if diff_from_neg_x.is_number:
-                    if is_increasing:
-                        x2_calculated = self.a + self.epsilon - self.b
-                    else:
-                        # f(x)+b = -x+c+b = f(a)-ε = -a+c-ε → -x = -a-ε-b → x = a+ε+b
-                        x2_calculated = self.a + self.epsilon + self.b
-                    if x2_calculated >= self.a:
-                        x2 = x2_calculated
-                    else:
-                        x2 = self.a
-                # 関数がsqrt(x)+定数の場合を検出 (sqrt(x), sqrt(x)+1, sqrt(x)-1 など)
-                else:
-                    diff_from_sqrt = sp.simplify(expr - sp.sqrt(x_sym))
-                    if diff_from_sqrt.is_number:
-                        # f(x)+b = sqrt(x)+c+b = f(a)+ε = sqrt(a)+c+ε
-                        # → sqrt(x) = sqrt(a)+ε-b → x = (sqrt(a)+ε-b)²
-                        # sqrt(a)を計算（定数部分cを除く）
-                        sqrt_a = np.sqrt(self.a) if self.a >= 0 else 0
-                        if is_increasing:
-                            sqrt_arg = sqrt_a + self.epsilon - self.b
-                        else:
-                            sqrt_arg = sqrt_a - self.epsilon - self.b
-                        if sqrt_arg >= 0:
-                            x2_calculated = sqrt_arg ** 2
-                            if x2_calculated >= self.a:
-                                x2 = x2_calculated
-                            else:
-                                x2 = self.a
-                        else:
-                            x2 = self.a
-                    else:
-                        # 関数が-sqrt(x)+定数の場合を検出 (-sqrt(x), -sqrt(x)+1, -sqrt(x)-1 など)
-                        diff_from_neg_sqrt = sp.simplify(expr + sp.sqrt(x_sym))
-                        if diff_from_neg_sqrt.is_number:
-                            # f(x)+b = -sqrt(x)+c+b = f(a)-ε = -sqrt(a)+c-ε
-                            # → -sqrt(x) = -sqrt(a)-ε-b → sqrt(x) = sqrt(a)+ε+b → x = (sqrt(a)+ε+b)²
-                            sqrt_a = np.sqrt(self.a) if self.a >= 0 else 0
-                            if is_increasing:
-                                # 単調増加（実際には-sqrt(x)は単調減少だが念のため）
-                                sqrt_arg = sqrt_a + self.epsilon - self.b
-                            else:
-                                # 単調減少の場合: target_y_for_x2 = f(a) - ε = -sqrt(a) + c - ε
-                                # f(x) + b = -sqrt(x) + c + b = -sqrt(a) + c - ε
-                                # -sqrt(x) = -sqrt(a) - ε - b
-                                # sqrt(x) = sqrt(a) + ε + b
-                                sqrt_arg = sqrt_a + self.epsilon + self.b
-                            if sqrt_arg >= 0:
-                                x2_calculated = sqrt_arg ** 2
-                                if x2_calculated >= self.a:
-                                    x2 = x2_calculated
-                                else:
-                                    x2 = self.a
-                            else:
-                                x2 = self.a
-        except:
-            pass
-        
-        # x2がまだ計算されていない場合、数値的に交点を求める
-        if x2 is None:
-            # その他の関数の場合、数値的に交点を求める
-            # x >= aの範囲でf(x)+bとtarget_y_for_x2の交点を求める
-            x_candidates_x2 = np.linspace(self.a, max(3, self.a + abs(self.epsilon) + abs(self.b) + 1), 5000)
-            y_fx_plus_b_x2 = self.evaluate_f_plus_b(x_candidates_x2)
-            diff_x2 = y_fx_plus_b_x2 - target_y_for_x2
-            # NaN値を処理
-            diff_x2_sign = np.sign(diff_x2)
-            diff_x2_sign[np.isnan(diff_x2)] = 0
-            crossings_x2 = np.where(np.diff(diff_x2_sign) != 0)[0]
-            
-            if len(crossings_x2) > 0:
-                # 最もaに近い交点を選択
-                intersections_x2 = []
-                for i in crossings_x2:
-                    if i < len(x_candidates_x2) - 1:
-                        x1_i, x2_i = x_candidates_x2[i], x_candidates_x2[i+1]
-                        y1_i, y2_i = y_fx_plus_b_x2[i], y_fx_plus_b_x2[i+1]
-                        # NaN値をスキップ
-                        if np.isnan(y1_i) or np.isnan(y2_i):
-                            continue
-                        if abs(y2_i - y1_i) > 1e-10:
-                            t = (target_y_for_x2 - y1_i) / (y2_i - y1_i)
-                            x_intersect = x1_i + t * (x2_i - x1_i)
-                            if x_intersect >= self.a:  # x >= aの範囲のみ
-                                intersections_x2.append(x_intersect)
-                
-                if intersections_x2:
-                    distances_x2 = [abs(x - self.a) for x in intersections_x2]
-                    closest_idx_x2 = np.argmin(distances_x2)
-                    x2 = intersections_x2[closest_idx_x2]
-            
-            # 交点が見つからない場合、x2 = aに設定
-            if x2 is None:
-                x2 = self.a
-        
-        # 微小なεの場合、より高精度な交点計算
-        if abs(self.epsilon) < 1e-6:
-            # より細かい範囲で交点を再計算
-            intersections_for_x1 = self.find_intersections(target_y_for_x1, self.a - 2*abs(self.delta), self.a + 2*abs(self.delta), jump_exclude=True)
-            # x2も再計算
-            x_candidates_x2 = np.linspace(self.a, self.a + 2*abs(self.delta), 5000)
-            y_fx_plus_b_x2 = self.evaluate_f_plus_b(x_candidates_x2)
-            diff_x2 = y_fx_plus_b_x2 - target_y_for_x2
-            # NaN値を処理
-            diff_x2_sign = np.sign(diff_x2)
-            diff_x2_sign[np.isnan(diff_x2)] = 0
-            crossings_x2 = np.where(np.diff(diff_x2_sign) != 0)[0]
-            
-            if len(crossings_x2) > 0:
-                intersections_x2 = []
-                for i in crossings_x2:
-                    if i < len(x_candidates_x2) - 1:
-                        x1_i, x2_i = x_candidates_x2[i], x_candidates_x2[i+1]
-                        y1_i, y2_i = y_fx_plus_b_x2[i], y_fx_plus_b_x2[i+1]
-                        # NaN値をスキップ
-                        if np.isnan(y1_i) or np.isnan(y2_i):
-                            continue
-                        if abs(y2_i - y1_i) > 1e-10:
-                            t = (target_y_for_x2 - y1_i) / (y2_i - y1_i)
-                            x_intersect = x1_i + t * (x2_i - x1_i)
-                            if x_intersect >= self.a:  # x >= aの範囲
-                                intersections_x2.append(x_intersect)
-                
-                if intersections_x2:
-                    distances_x2 = [abs(x - self.a) for x in intersections_x2]
-                    closest_idx_x2 = np.argmin(distances_x2)
-                    x2 = intersections_x2[closest_idx_x2]
-            
-            # 微小なεの場合でも交点が見つからない場合はx2 = aに設定
-            if x2 is None:
-                x2 = self.a
-        
-        # x1を設定（target_y_for_x1を満たすx座標、最もaに近い交点を選択）
-        x1 = None
-        if intersections_for_x1:
-            # 交点からaより左側で最もaに近いものをx1として選択
-            x_candidates = [x for x, y in intersections_for_x1 if x < self.a]
-            if x_candidates:
-                distances_x1 = [abs(x - self.a) for x in x_candidates]
-                closest_x1_idx = np.argmin(distances_x1)
-                x1 = x_candidates[closest_x1_idx]
-            else:
-                # aより左側に交点がない場合は、最もaに近いものを選択
-                distances_x1 = [abs(x - self.a) for x, y in intersections_for_x1]
-                closest_x1_idx = np.argmin(distances_x1)
-                x1 = intersections_for_x1[closest_x1_idx][0]
-        
+
+        x1, x2 = self._compute_x1_x2(f_a, is_increasing, target_y_for_x1, target_y_for_x2)
+
+        if x1 is not None and x2 is not None and self.epsilon > 0:
+            band_left = min(x1, self.a)
+            band_right = max(x2, self.a)
+            if band_right > band_left:
+                eps_band = patches.Rectangle(
+                    (band_left, f_a - self.epsilon),
+                    band_right - band_left,
+                    2 * self.epsilon,
+                    facecolor=self.colors["accent"],
+                    alpha=0.25,
+                    edgecolor="none",
+                    linewidth=0,
+                    zorder=3,
+                )
+                self.ax.add_patch(eps_band)
+
         # D6領域の作成（白色四角形）
         # 説明: x=0からx=aまでの範囲で、y=f(a)からy=f(a)+bまでの矩形領域
         # この領域は、不連続点x=aにおける関数の値の差（b）を視覚化するために使用されます
