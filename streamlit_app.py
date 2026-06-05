@@ -18,28 +18,6 @@ import streamlit as st
 
 from epsilon_delta import EpsilonDeltaVisualizer
 
-# Streamlit の float スライダーは刻みが粗くなるため、δ は整数 tick で 0.0001 刻みを表現
-DELTA_TICK_SCALE = 10000
-
-
-def _delta_to_ticks(delta: float) -> int:
-    return max(1, min(DELTA_TICK_SCALE, int(round(float(delta) * DELTA_TICK_SCALE))))
-
-
-def _ticks_to_delta(ticks: int) -> float:
-    return float(ticks) / DELTA_TICK_SCALE
-
-
-def _sync_delta_num_from_ticks() -> None:
-    st.session_state.sdelta = _ticks_to_delta(st.session_state.sdelta_ticks)
-    st.session_state.sdelta_num = st.session_state.sdelta
-
-
-def _sync_delta_ticks_from_num() -> None:
-    st.session_state.sdelta = float(st.session_state.sdelta_num)
-    st.session_state.sdelta_ticks = _delta_to_ticks(st.session_state.sdelta_num)
-
-
 def _sync_num_from_slider(slider_key: str, num_key: str) -> None:
     st.session_state[num_key] = st.session_state[slider_key]
 
@@ -64,7 +42,6 @@ def _init_sidebar_state(viz: EpsilonDeltaVisualizer) -> None:
     st.session_state.sa_num = st.session_state.sa
     st.session_state.seps_num = st.session_state.seps
     st.session_state.sdelta_num = st.session_state.sdelta
-    st.session_state.sdelta_ticks = _delta_to_ticks(st.session_state.sdelta)
     st.session_state.sb_num = st.session_state.sb
     st.session_state.func_expr_key = viz.initial_function_expr
     st.session_state.view_xlim = tuple(viz.initial_xlim)
@@ -84,7 +61,6 @@ def _apply_pending_streamlit_mutations(viz: EpsilonDeltaVisualizer) -> None:
         st.session_state.sa_num = st.session_state.sa
         st.session_state.seps_num = st.session_state.seps
         st.session_state.sdelta_num = st.session_state.sdelta
-        st.session_state.sdelta_ticks = _delta_to_ticks(st.session_state.sdelta)
         st.session_state.sb_num = st.session_state.sb
         st.session_state.func_expr_key = viz.initial_function_expr
         st.session_state.view_xlim = tuple(viz.initial_xlim)
@@ -204,13 +180,6 @@ for _sk, _nk in (
 ):
     if _nk not in st.session_state and _sk in st.session_state:
         st.session_state[_nk] = st.session_state[_sk]
-if "sdelta_ticks" not in st.session_state and "sdelta" in st.session_state:
-    st.session_state.sdelta_ticks = _delta_to_ticks(st.session_state.sdelta)
-if "sdelta_ticks" in st.session_state:
-    st.session_state.sdelta = _ticks_to_delta(st.session_state.sdelta_ticks)
-    if "sdelta_num" not in st.session_state:
-        st.session_state.sdelta_num = st.session_state.sdelta
-
 with st.sidebar:
     st.subheader("パラメータ")
 
@@ -252,19 +221,14 @@ with st.sidebar:
         on_change=partial(_sync_slider_from_num, "seps", "seps_num"),
     )
 
-    _delta_slider_label = (
-        f"δ（スライダー）: {_ticks_to_delta(st.session_state.sdelta_ticks):.4f}"
-        if "sdelta_ticks" in st.session_state
-        else "δ（スライダー）"
-    )
     st.slider(
-        _delta_slider_label,
-        min_value=1,
-        max_value=DELTA_TICK_SCALE,
-        step=1,
-        key="sdelta_ticks",
-        on_change=_sync_delta_num_from_ticks,
-        help="0.0001 刻み（スライダー下の数値入力でも同じ精度で変更できます）",
+        "δ（スライダー）",
+        min_value=0.0001,
+        max_value=1.0,
+        step=0.0001,
+        format="%.4f",
+        key="sdelta",
+        on_change=partial(_sync_num_from_slider, "sdelta", "sdelta_num"),
     )
     st.number_input(
         "δ（数値入力）",
@@ -273,7 +237,7 @@ with st.sidebar:
         step=0.0001,
         format="%.4f",
         key="sdelta_num",
-        on_change=_sync_delta_ticks_from_num,
+        on_change=partial(_sync_slider_from_num, "sdelta", "sdelta_num"),
     )
 
     st.slider(
@@ -297,7 +261,7 @@ with st.sidebar:
 
     a = float(st.session_state.sa)
     epsilon = float(st.session_state.seps)
-    delta = _ticks_to_delta(st.session_state.sdelta_ticks)
+    delta = float(st.session_state.sdelta)
     b = float(st.session_state.sb)
 
     viz.a = a
@@ -380,7 +344,7 @@ with st.sidebar:
 expr = st.session_state.func_expr_key
 viz.a = float(st.session_state.sa)
 viz.epsilon = float(st.session_state.seps)
-viz.delta = _ticks_to_delta(st.session_state.sdelta_ticks)
+viz.delta = float(st.session_state.sdelta)
 viz.b = float(st.session_state.sb)
 viz.update_function(expr)
 st.session_state.view_xlim = tuple(viz.ax.get_xlim())
