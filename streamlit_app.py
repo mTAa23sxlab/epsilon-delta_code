@@ -123,7 +123,6 @@ st.markdown(
 )
 
 st.title("ε-δ論法")
-st.caption("ブラウザのみで利用できます（学生側で Python のインストールは不要です）。")
 
 viz = get_visualizer()
 _init_sidebar_state(viz)
@@ -144,6 +143,10 @@ for _sk, _nk in (
         st.session_state[_nk] = st.session_state[_sk]
 if "sdelta_ticks" not in st.session_state and "sdelta" in st.session_state:
     st.session_state.sdelta_ticks = _delta_to_ticks(st.session_state.sdelta)
+if "sdelta_ticks" in st.session_state:
+    st.session_state.sdelta = _ticks_to_delta(st.session_state.sdelta_ticks)
+    if "sdelta_num" not in st.session_state:
+        st.session_state.sdelta_num = st.session_state.sdelta
 
 with st.sidebar:
     st.subheader("パラメータ")
@@ -209,8 +212,6 @@ with st.sidebar:
         key="sdelta_num",
         on_change=_sync_delta_ticks_from_num,
     )
-    st.session_state.sdelta = _ticks_to_delta(st.session_state.sdelta_ticks)
-    st.session_state.sdelta_num = st.session_state.sdelta
 
     st.slider(
         "b（スライダー）",
@@ -233,7 +234,7 @@ with st.sidebar:
 
     a = float(st.session_state.sa)
     epsilon = float(st.session_state.seps)
-    delta = float(st.session_state.sdelta)
+    delta = _ticks_to_delta(st.session_state.sdelta_ticks)
     b = float(st.session_state.sb)
 
     viz.a = a
@@ -316,7 +317,7 @@ with st.sidebar:
 expr = st.session_state.func_expr_key
 viz.a = float(st.session_state.sa)
 viz.epsilon = float(st.session_state.seps)
-viz.delta = float(st.session_state.sdelta)
+viz.delta = _ticks_to_delta(st.session_state.sdelta_ticks)
 viz.b = float(st.session_state.sb)
 viz.update_function(expr)
 st.session_state.view_xlim = tuple(viz.ax.get_xlim())
