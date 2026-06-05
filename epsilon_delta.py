@@ -862,137 +862,6 @@ class EpsilonDeltaVisualizer:
                 x2 = self.a
 
         return x1, x2
-
-    def _add_region_patch(self, verts, color=None, alpha=0.3, zorder=3):
-        if len(verts) < 3:
-            return
-        self.ax.add_patch(
-            patches.PathPatch(
-                Path(verts),
-                facecolor=color or self.colors["accent"],
-                alpha=alpha,
-                edgecolor="none",
-                linewidth=0,
-                zorder=zorder,
-            )
-        )
-
-    def _draw_epsilon_regions_partitioned(
-        self, x1, x2, f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing
-    ):
-        """ε領域（D1+D2）を重ならない単純多角形に分割して描画（b=0）"""
-        a = self.a
-        x_left = min(x1, a)
-        x_max = max(x1, x2)
-        color = self.colors["accent"]
-        alpha = 0.3
-
-        if is_increasing:
-            xs_left = np.linspace(0, x_left, 200)
-            ys_left = self.evaluate_function(xs_left)
-            v_left_lo = [(0, f_a_minus_epsilon)]
-            for x, y in zip(xs_left, ys_left):
-                if not np.isnan(y) and y >= f_a_minus_epsilon:
-                    v_left_lo.append((float(x), float(y)))
-            v_left_lo.extend([(x_left, f_a), (0, f_a)])
-            self._add_region_patch(v_left_lo, color, alpha)
-
-            if x_left < a - 1e-12:
-                xs_mid = np.linspace(x_left, a, 200)
-                ys_mid = self.evaluate_function(xs_mid)
-
-                v_mid_lo = [(x_left, f_a_minus_epsilon)]
-                for x, y in zip(xs_mid, ys_mid):
-                    if not np.isnan(y) and y >= f_a_minus_epsilon:
-                        v_mid_lo.append((float(x), float(y)))
-                v_mid_lo.extend([(a, f_a_minus_epsilon)])
-                self._add_region_patch(v_mid_lo, color, alpha)
-
-                v_mid_hi = [(x_left, f_a), (a, f_a)]
-                for x, y in zip(xs_mid[::-1], ys_mid[::-1]):
-                    if not np.isnan(y) and f_a_minus_epsilon <= y <= f_a:
-                        v_mid_hi.append((float(x), float(y)))
-                self._add_region_patch(v_mid_hi, color, alpha)
-
-                self._add_region_patch(
-                    [(x_left, 0), (a, 0), (a, f_a_minus_epsilon), (x_left, f_a_minus_epsilon)],
-                    color,
-                    alpha,
-                )
-
-            if x_max > a + 1e-12:
-                self._add_region_patch(
-                    [(a, 0), (x_max, 0), (x_max, f_a), (a, f_a)],
-                    color,
-                    alpha,
-                )
-                xs_top = np.linspace(a, x_max, 200)
-                ys_top = self.evaluate_function(xs_top)
-                v_top = [(a, f_a)]
-                for x, y in zip(xs_top, ys_top):
-                    if not np.isnan(y) and f_a <= y <= f_a_plus_epsilon:
-                        v_top.append((float(x), float(y)))
-                v_top.extend([(x_max, f_a_plus_epsilon), (a, f_a_plus_epsilon)])
-                self._add_region_patch(v_top, color, alpha)
-
-            self._add_region_patch(
-                [(0, f_a), (0, f_a_plus_epsilon), (x_left, f_a_plus_epsilon), (x_left, f_a)],
-                color,
-                alpha,
-            )
-        else:
-            xs_left = np.linspace(0, x_left, 200)
-            ys_left = self.evaluate_function(xs_left)
-            v_left_hi = [(0, f_a_plus_epsilon)]
-            for x, y in zip(xs_left, ys_left):
-                if not np.isnan(y) and y <= f_a_plus_epsilon:
-                    v_left_hi.append((float(x), float(y)))
-            v_left_hi.extend([(x_left, f_a), (0, f_a)])
-            self._add_region_patch(v_left_hi, color, alpha)
-
-            if x_left < a - 1e-12:
-                xs_mid = np.linspace(x_left, a, 200)
-                ys_mid = self.evaluate_function(xs_mid)
-
-                v_mid_hi = [(x_left, f_a_plus_epsilon)]
-                for x, y in zip(xs_mid, ys_mid):
-                    if not np.isnan(y) and y <= f_a_plus_epsilon:
-                        v_mid_hi.append((float(x), float(y)))
-                v_mid_hi.extend([(a, f_a_plus_epsilon)])
-                self._add_region_patch(v_mid_hi, color, alpha)
-
-                v_mid_lo = [(x_left, f_a), (a, f_a)]
-                for x, y in zip(xs_mid[::-1], ys_mid[::-1]):
-                    if not np.isnan(y) and f_a <= y <= f_a_plus_epsilon:
-                        v_mid_lo.append((float(x), float(y)))
-                self._add_region_patch(v_mid_lo, color, alpha)
-
-                self._add_region_patch(
-                    [(x_left, 0), (a, 0), (a, f_a_plus_epsilon), (x_left, f_a_plus_epsilon)],
-                    color,
-                    alpha,
-                )
-
-            if x_max > a + 1e-12:
-                self._add_region_patch(
-                    [(a, 0), (x_max, 0), (x_max, f_a), (a, f_a)],
-                    color,
-                    alpha,
-                )
-                xs_bot = np.linspace(a, x_max, 200)
-                ys_bot = self.evaluate_function(xs_bot)
-                v_bot = [(a, f_a)]
-                for x, y in zip(xs_bot, ys_bot):
-                    if not np.isnan(y) and f_a_minus_epsilon <= y <= f_a:
-                        v_bot.append((float(x), float(y)))
-                v_bot.extend([(x_max, f_a_minus_epsilon), (a, f_a_minus_epsilon)])
-                self._add_region_patch(v_bot, color, alpha)
-
-            self._add_region_patch(
-                [(0, f_a), (0, f_a_minus_epsilon), (x_left, f_a_minus_epsilon), (x_left, f_a)],
-                color,
-                alpha,
-            )
     
     def reset_to_initial(self, event=None):
         """初期状態に戻す"""
@@ -1572,59 +1441,54 @@ class EpsilonDeltaVisualizer:
         # 単調増加: x=0からx=aまでの範囲で、y=f(a)-εからy=f(a)までの領域
         # 単調減少: x=0からx=aまでの範囲で、y=f(a)からy=f(a)+εまでの領域（x軸基準で反転）
         if x1 is not None and x2 is not None:
-            if abs(self.b) < 1e-12:
-                self._draw_epsilon_regions_partitioned(
-                    x1, x2, f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing
-                )
-            else:
-                # D1_1領域の頂点を定義
-                d1_1_verts = []
+            # D1_1領域の頂点を定義
+            d1_1_verts = []
 
-                x_curve_d1_1 = np.linspace(0, self.a, 500)
-                y_curve_d1_1 = self.evaluate_function(x_curve_d1_1)
+            x_curve_d1_1 = np.linspace(0, self.a, 500)
+            y_curve_d1_1 = self.evaluate_function(x_curve_d1_1)
 
-                if is_increasing:
-                    d1_1_verts.append((0, f_a_minus_epsilon))
-                    valid_mask = ~np.isnan(y_curve_d1_1) & (y_curve_d1_1 >= f_a_minus_epsilon)
-                    valid_indices = np.where(valid_mask)[0]
-                    if len(valid_indices) > 0:
-                        x_right = x_curve_d1_1[valid_indices[-1]]
-                        for i in valid_indices:
-                            if not np.isnan(y_curve_d1_1[i]):
-                                d1_1_verts.append((x_curve_d1_1[i], y_curve_d1_1[i]))
-                        d1_1_verts.append((x_right, f_a_minus_epsilon))
-                        d1_1_verts.append((self.a, f_a))
-                    else:
-                        d1_1_verts.append((self.a, f_a_minus_epsilon))
-                        d1_1_verts.append((self.a, f_a))
-                    d1_1_verts.append((0, f_a))
+            if is_increasing:
+                d1_1_verts.append((0, f_a_minus_epsilon))
+                valid_mask = ~np.isnan(y_curve_d1_1) & (y_curve_d1_1 >= f_a_minus_epsilon)
+                valid_indices = np.where(valid_mask)[0]
+                if len(valid_indices) > 0:
+                    x_right = x_curve_d1_1[valid_indices[-1]]
+                    for i in valid_indices:
+                        if not np.isnan(y_curve_d1_1[i]):
+                            d1_1_verts.append((x_curve_d1_1[i], y_curve_d1_1[i]))
+                    d1_1_verts.append((x_right, f_a_minus_epsilon))
+                    d1_1_verts.append((self.a, f_a))
                 else:
-                    d1_1_verts.append((0, f_a_plus_epsilon))
-                    valid_mask = ~np.isnan(y_curve_d1_1) & (y_curve_d1_1 <= f_a_plus_epsilon)
-                    valid_indices = np.where(valid_mask)[0]
-                    if len(valid_indices) > 0:
-                        x_right = x_curve_d1_1[valid_indices[-1]]
-                        for i in valid_indices:
-                            if not np.isnan(y_curve_d1_1[i]):
-                                d1_1_verts.append((x_curve_d1_1[i], y_curve_d1_1[i]))
-                        d1_1_verts.append((x_right, f_a_plus_epsilon))
-                        d1_1_verts.append((self.a, f_a))
-                    else:
-                        d1_1_verts.append((self.a, f_a_plus_epsilon))
-                        d1_1_verts.append((self.a, f_a))
-                    d1_1_verts.append((0, f_a))
+                    d1_1_verts.append((self.a, f_a_minus_epsilon))
+                    d1_1_verts.append((self.a, f_a))
+                d1_1_verts.append((0, f_a))
+            else:
+                d1_1_verts.append((0, f_a_plus_epsilon))
+                valid_mask = ~np.isnan(y_curve_d1_1) & (y_curve_d1_1 <= f_a_plus_epsilon)
+                valid_indices = np.where(valid_mask)[0]
+                if len(valid_indices) > 0:
+                    x_right = x_curve_d1_1[valid_indices[-1]]
+                    for i in valid_indices:
+                        if not np.isnan(y_curve_d1_1[i]):
+                            d1_1_verts.append((x_curve_d1_1[i], y_curve_d1_1[i]))
+                    d1_1_verts.append((x_right, f_a_plus_epsilon))
+                    d1_1_verts.append((self.a, f_a))
+                else:
+                    d1_1_verts.append((self.a, f_a_plus_epsilon))
+                    d1_1_verts.append((self.a, f_a))
+                d1_1_verts.append((0, f_a))
 
-                # D1_1領域を描画
-                if len(d1_1_verts) > 2:
-                    d1_1_path = Path(d1_1_verts)
-                    d1_1_patch = patches.PathPatch(d1_1_path, facecolor=self.colors['accent'], 
-                                                 alpha=0.3, edgecolor='none', 
-                                                 linewidth=0)
-                    self.ax.add_patch(d1_1_patch)
-                    # D1_1領域のラベル
-                    # self.add_region_label(d1_1_verts, 'D1_1', color=self.colors['accent'], position='top_left')
+            # D1_1領域を描画
+            if len(d1_1_verts) > 2:
+                d1_1_path = Path(d1_1_verts)
+                d1_1_patch = patches.PathPatch(d1_1_path, facecolor=self.colors['accent'], 
+                                             alpha=0.3, edgecolor='none', 
+                                             linewidth=0)
+                self.ax.add_patch(d1_1_patch)
+                # D1_1領域のラベル
+                # self.add_region_label(d1_1_verts, 'D1_1', color=self.colors['accent'], position='top_left')
 
-        _draw_legacy_d2_d1 = x1 is not None and x2 is not None and abs(self.b) >= 1e-12
+        _draw_d2_d1_2 = x1 is not None and x2 is not None
 
         # D5領域の作成（D2より手前に描画）
         # 説明: 不連続点x=aの右側で、関数f(x)+bがf(a)と交わる点までの矩形領域
@@ -1702,7 +1566,7 @@ class EpsilonDeltaVisualizer:
         # D2領域を2つに分割：
         # - D2_1: ①、④、⑤、⑥で囲まれた領域（x <= aの部分）
         # - D2_2: ②、③、⑦、⑧で囲まれた領域（x >= aの部分）
-        if _draw_legacy_d2_d1:
+        if _draw_d2_d1_2:
             # x1とx2の範囲で関数の値を取得
             x_min = min(x1, x2)
             x_max = max(x1, x2)
@@ -1997,7 +1861,7 @@ class EpsilonDeltaVisualizer:
         # 説明: ε近傍の領域（単調増加：上側、単調減少：下側）
         # 単調増加: (0, f(a)), (a, f(a)), (x2, f(a)+ε), (0, f(a)+ε)と⑧の点で囲まれた領域
         # 単調減少: (0, f(a)-ε), (a, f(a)), (x2, f(a)-ε), (0, f(a)-ε)と⑧の点で囲まれた領域（x軸基準で反転）
-        if _draw_legacy_d2_d1:
+        if _draw_d2_d1_2:
             # D1_2領域の頂点を定義
             d1_2_verts = []
             
