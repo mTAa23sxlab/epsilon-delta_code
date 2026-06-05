@@ -71,7 +71,12 @@ class EpsilonDeltaVisualizer:
         # マス目を正方形にする（データ座標で縦横1単位が同じ長さ）
         self.ax.set_aspect("equal", adjustable="box")
         
-        # 軸のスタイリング（軸線は描画せず、数値ラベルのみ draw_axes で表示）
+        # 目盛り数値の配置（拡大しても画面端からの距離を一定に保つ）
+        self._x_label_axes_y = -0.10
+        self._y_label_axes_x = -0.055
+        self.origin_label = None
+
+        # 軸のスタイリング（x=0/y=0 の軸線は draw_axes で表示範囲内のときのみ描画）
         for spine in self.ax.spines.values():
             spine.set_visible(False)
         # x軸とy軸に目盛りを表示（初期設定、draw_axesで動的に更新）
@@ -503,7 +508,7 @@ class EpsilonDeltaVisualizer:
         return f"{int(value)}"
 
     def draw_axes(self):
-        """目盛り数値のみ表示（軸線・目盛り線は描画しない）"""
+        """軸線・目盛り数値・原点ラベルを表示（表示範囲外は非表示）"""
         xlim = self.ax.get_xlim()
         ylim = self.ax.get_ylim()
         axes_state = (
@@ -552,7 +557,13 @@ class EpsilonDeltaVisualizer:
                     tick_line.remove()
                 except:
                     pass
-        
+        if getattr(self, "origin_label", None) is not None:
+            try:
+                self.origin_label.remove()
+            except Exception:
+                pass
+            self.origin_label = None
+
         # 目盛りの基本設定
         # x軸（y=0）とy軸（x=0）にメモリ（目盛り）を表示
         self.ax.tick_params(colors=self.colors['text'], labelsize=10, width=1, length=5, 
@@ -614,24 +625,39 @@ class EpsilonDeltaVisualizer:
         
         x_ticks = self.ax.xaxis.get_majorticklocs()
         y_ticks = self.ax.yaxis.get_majorticklocs()
-        x_label_pad = (ylim[1] - ylim[0]) * 0.03
-        y_label_pad = (xlim[1] - xlim[0]) * 0.03
+        x_axis_visible = ylim[0] <= 0 <= ylim[1]
+        y_axis_visible = xlim[0] <= 0 <= xlim[1]
 
-        self.x_axis_line = None
-        self.y_axis_line = None
         self.x_axis_ticks = []
         self.y_axis_ticks = []
+        if x_axis_visible:
+            self.x_axis_line = self.ax.axhline(
+                y=0, color="#1A1A1A", linestyle="-", alpha=0.9, linewidth=1.5, zorder=5
+            )
+        else:
+            self.x_axis_line = None
+        if y_axis_visible:
+            self.y_axis_line = self.ax.axvline(
+                x=0, color="#1A1A1A", linestyle="-", alpha=0.9, linewidth=1.5, zorder=5
+            )
+        else:
+            self.y_axis_line = None
+
+        trans_x = self.ax.get_xaxis_transform()
+        trans_y = self.ax.get_yaxis_transform()
         self.x_axis_labels = []
         for tick_x in x_ticks:
             if xlim[0] <= tick_x <= xlim[1]:
                 label = self.ax.text(
                     tick_x,
-                    ylim[0] - x_label_pad,
+                    self._x_label_axes_y,
                     self._format_tick_label(tick_x, x_tick_interval),
+                    transform=trans_x,
                     ha="center",
                     va="top",
                     fontsize=10,
                     color=self.colors["text"],
+                    clip_on=False,
                     zorder=15,
                 )
                 self.x_axis_labels.append(label)
@@ -640,16 +666,39 @@ class EpsilonDeltaVisualizer:
         for tick_y in y_ticks:
             if ylim[0] <= tick_y <= ylim[1]:
                 label = self.ax.text(
-                    xlim[0] - y_label_pad,
+                    self._y_label_axes_x,
                     tick_y,
                     self._format_tick_label(tick_y, y_tick_interval),
+                    transform=trans_y,
                     ha="right",
                     va="center",
                     fontsize=10,
                     color=self.colors["text"],
+                    clip_on=False,
                     zorder=15,
                 )
                 self.y_axis_labels.append(label)
+
+        if x_axis_visible and y_axis_visible:
+            self.origin_label = self.ax.text(
+                0,
+                0,
+                "O",
+                fontsize=14,
+                fontweight="bold",
+                color=self.colors["primary"],
+                ha="right",
+                va="top",
+                bbox=dict(
+                    boxstyle="round,pad=0.3",
+                    facecolor="white",
+                    edgecolor="none",
+                    alpha=0.8,
+                ),
+                zorder=15,
+            )
+        else:
+            self.origin_label = None
     
     def find_intersections(self, target_y, min_x=-3, max_x=3, jump_exclude=False):
         """関数と水平線の交点を求める（jump_exclude=Trueなら不連続点x=aをまたぐ交点は除外）"""
@@ -1148,6 +1197,8 @@ class EpsilonDeltaVisualizer:
         protected_texts = set(
             getattr(self, "x_axis_labels", []) + getattr(self, "y_axis_labels", [])
         )
+        if getattr(self, "origin_label", None) is not None:
+            protected_texts.add(self.origin_label)
 
         # 既存の要素をクリア（関数の線・軸ラベル以外）
         for artist in self.ax.collections + self.ax.patches:
@@ -2281,12 +2332,6 @@ class EpsilonDeltaVisualizer:
 
         self.ax.set_aspect("equal", adjustable="box")
 
-        # 原点Oを表示
-        self.ax.text(0, 0, 'O', fontsize=14, fontweight='bold', 
-                    color=self.colors['primary'], ha='right', va='top',
-                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
-                            edgecolor='none', alpha=0.8), zorder=15)
-        
         if self._streamlit_mode:
             self.fig.canvas.draw()
         else:
