@@ -982,15 +982,17 @@ class EpsilonDeltaVisualizer:
         return verts
 
     def _build_d2_1_verts_b0(self, x1, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing):
-        """P2: (x1,0)→(a,0)→(a,f(a))→曲線→(x1,f(a)∓ε) = D2_1"""
-        x_left = min(x1, self.a)
-        if x_left >= self.a - 1e-15:
+        """P2: (x₁,0)→(a,0)→(a,f(a))→f(x)→(x₁,f(a)∓ε)"""
+        if x1 is None or x1 >= self.a - 1e-15:
             return None
+        x_left = float(x1)
         f_a = float(self.evaluate_function(np.array([self.a]))[0])
+        eps_y = f_a_minus_epsilon if is_increasing else f_a_plus_epsilon
         verts = [(x_left, 0.0), (self.a, 0.0), (self.a, f_a)]
         x_curve = np.linspace(self.a, x_left, 1000)
         y_curve = self.evaluate_function(x_curve)
-        for i in range(len(x_curve) - 1, -1, -1):
+        # (a,f(a)) は既に追加済み。(x₁,f(a)∓ε) は末尾で明示する。
+        for i in range(len(x_curve) - 2, 0, -1):
             x, y = x_curve[i], y_curve[i]
             if np.isnan(y):
                 continue
@@ -998,6 +1000,7 @@ class EpsilonDeltaVisualizer:
                 verts.append((float(x), float(y)))
             elif not is_increasing and y <= 0:
                 verts.append((float(x), float(y)))
+        verts.append((x_left, eps_y))
         return verts
 
     def _build_d2_2_verts_b0(self, x2, f_a, is_increasing):
