@@ -125,15 +125,21 @@ st.markdown(
         [data-testid="stSidebar"] {
             transform: translateX(0) !important;
             visibility: visible !important;
-            min-width: 16rem !important;
+            width: 32% !important;
+            min-width: 22rem !important;
+            max-width: 36rem !important;
+        }
+        section[data-testid="stSidebar"] > div {
+            width: 100% !important;
+        }
+        [data-testid="stSidebarContent"] {
+            width: 100% !important;
+            opacity: 1 !important;
+            visibility: visible !important;
         }
         [data-testid="stSidebar"][aria-expanded="false"] {
             transform: translateX(0) !important;
             margin-left: 0 !important;
-        }
-        [data-testid="stSidebarContent"] {
-            opacity: 1 !important;
-            visibility: visible !important;
         }
     </style>
     """,
