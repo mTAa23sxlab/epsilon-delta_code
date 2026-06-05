@@ -19,15 +19,12 @@ import streamlit as st
 from epsilon_delta import EpsilonDeltaVisualizer
 
 
+def _sync_num_from_slider(slider_key: str, num_key: str) -> None:
+    st.session_state[num_key] = st.session_state[slider_key]
+
+
 def _sync_slider_from_num(slider_key: str, num_key: str) -> None:
     st.session_state[slider_key] = st.session_state[num_key]
-
-
-def _rerun_fragment() -> None:
-    try:
-        st.rerun(scope="fragment")
-    except TypeError:
-        st.rerun()
 
 
 @st.cache_resource
@@ -85,10 +82,7 @@ def _render_plot(viz: EpsilonDeltaVisualizer) -> None:
 
     st.session_state.view_xlim = tuple(viz.ax.get_xlim())
     st.session_state.view_ylim = tuple(viz.ax.get_ylim())
-
-    if "plot_slot" not in st.session_state:
-        st.session_state.plot_slot = st.empty()
-    st.session_state.plot_slot.pyplot(viz.fig, use_container_width=True, dpi=72)
+    st.pyplot(viz.fig, use_container_width=True, dpi=72)
 
 
 st.set_page_config(
@@ -188,6 +182,11 @@ st.title("ε-δ論法")
 
 viz = get_visualizer()
 _init_sidebar_state(viz)
+_apply_pending_streamlit_mutations(viz)
+
+if "view_xlim" in st.session_state and "view_ylim" in st.session_state:
+    viz.ax.set_xlim(st.session_state.view_xlim)
+    viz.ax.set_ylim(st.session_state.view_ylim)
 
 for _sk, _nk in (
     ("sa", "sa_num"),
@@ -198,181 +197,155 @@ for _sk, _nk in (
     if _nk not in st.session_state and _sk in st.session_state:
         st.session_state[_nk] = st.session_state[_sk]
 
+with st.sidebar:
+    st.subheader("パラメータ")
 
-@st.fragment
-def interactive_ui() -> None:
-    _apply_pending_streamlit_mutations(viz)
+    st.slider(
+        "a（スライダー）",
+        min_value=0.0,
+        max_value=3.0,
+        step=0.01,
+        format="%.2f",
+        key="sa",
+        on_change=partial(_sync_num_from_slider, "sa", "sa_num"),
+    )
+    st.number_input(
+        "a（数値入力）",
+        min_value=0.0,
+        max_value=3.0,
+        step=0.01,
+        format="%.2f",
+        key="sa_num",
+        on_change=partial(_sync_slider_from_num, "sa", "sa_num"),
+    )
 
-    if "view_xlim" in st.session_state and "view_ylim" in st.session_state:
-        viz.ax.set_xlim(st.session_state.view_xlim)
-        viz.ax.set_ylim(st.session_state.view_ylim)
+    st.slider(
+        "ε（スライダー）",
+        min_value=0.001,
+        max_value=2.0,
+        step=0.001,
+        format="%.3f",
+        key="seps",
+        on_change=partial(_sync_num_from_slider, "seps", "seps_num"),
+    )
+    st.number_input(
+        "ε（数値入力）",
+        min_value=0.001,
+        max_value=2.0,
+        step=0.001,
+        format="%.3f",
+        key="seps_num",
+        on_change=partial(_sync_slider_from_num, "seps", "seps_num"),
+    )
 
-    with st.sidebar:
-        st.subheader("パラメータ")
+    st.slider(
+        "δ（スライダー）",
+        min_value=0.0001,
+        max_value=1.0,
+        step=0.0001,
+        format="%.4f",
+        key="sdelta",
+        on_change=partial(_sync_num_from_slider, "sdelta", "sdelta_num"),
+    )
+    st.number_input(
+        "δ（数値入力）",
+        min_value=0.0001,
+        max_value=1.0,
+        step=0.0001,
+        format="%.4f",
+        key="sdelta_num",
+        on_change=partial(_sync_slider_from_num, "sdelta", "sdelta_num"),
+    )
 
-        st.slider(
-            "a（スライダー）",
-            min_value=0.0,
-            max_value=3.0,
-            step=0.01,
-            format="%.2f",
-            key="sa",
-        )
-        st.number_input(
-            "a（数値入力）",
-            min_value=0.0,
-            max_value=3.0,
-            step=0.01,
-            format="%.2f",
-            key="sa_num",
-            on_change=partial(_sync_slider_from_num, "sa", "sa_num"),
-        )
+    st.slider(
+        "b（スライダー）",
+        min_value=-2.0,
+        max_value=2.0,
+        step=0.01,
+        format="%.2f",
+        key="sb",
+        on_change=partial(_sync_num_from_slider, "sb", "sb_num"),
+    )
+    st.number_input(
+        "b（数値入力）",
+        min_value=-2.0,
+        max_value=2.0,
+        step=0.01,
+        format="%.2f",
+        key="sb_num",
+        on_change=partial(_sync_slider_from_num, "sb", "sb_num"),
+    )
 
-        st.slider(
-            "ε（スライダー）",
-            min_value=0.001,
-            max_value=2.0,
-            step=0.001,
-            format="%.3f",
-            key="seps",
-        )
-        st.number_input(
-            "ε（数値入力）",
-            min_value=0.001,
-            max_value=2.0,
-            step=0.001,
-            format="%.3f",
-            key="seps_num",
-            on_change=partial(_sync_slider_from_num, "seps", "seps_num"),
-        )
+    st.subheader("関数 f(x)")
+    r1, r2 = st.columns(2)
+    with r1:
+        if st.button("x"):
+            st.session_state.func_expr_key = "x"
+            st.rerun()
+        if st.button("x**2"):
+            st.session_state.func_expr_key = "x**2"
+            st.rerun()
+    with r2:
+        if st.button("sqrt(x)"):
+            st.session_state.func_expr_key = "sqrt(x)"
+            st.rerun()
+        if st.button("±", help="現在の式の符号を反転"):
+            viz.negate_function(None)
+            st.session_state.func_expr_key = viz.function_expr
+            st.rerun()
 
-        st.slider(
-            "δ（スライダー）",
-            min_value=0.0001,
-            max_value=1.0,
-            step=0.0001,
-            format="%.4f",
-            key="sdelta",
-        )
-        st.number_input(
-            "δ（数値入力）",
-            min_value=0.0001,
-            max_value=1.0,
-            step=0.0001,
-            format="%.4f",
-            key="sdelta_num",
-            on_change=partial(_sync_slider_from_num, "sdelta", "sdelta_num"),
-        )
+    st.text_input(
+        "式（例: x**2, sqrt(x)）",
+        key="func_expr_key",
+    )
 
-        st.slider(
-            "b（スライダー）",
-            min_value=-2.0,
-            max_value=2.0,
-            step=0.01,
-            format="%.2f",
-            key="sb",
-        )
-        st.number_input(
-            "b（数値入力）",
-            min_value=-2.0,
-            max_value=2.0,
-            step=0.01,
-            format="%.2f",
-            key="sb_num",
-            on_change=partial(_sync_slider_from_num, "sb", "sb_num"),
-        )
+    st.subheader("表示")
+    st.caption(
+        "クラウド版は画像表示のためグラフ上のドラッグは使えません。"
+        "矢印で見る範囲を移動できます。"
+    )
+    xlim = viz.ax.get_xlim()
+    ylim = viz.ax.get_ylim()
+    step_x = 0.12 * (xlim[1] - xlim[0])
+    step_y = 0.12 * (ylim[1] - ylim[0])
+    p0, p1, p2, p3 = st.columns(4)
+    with p0:
+        if st.button("◀", help="左へ"):
+            viz.pan_by_data(step_x, 0.0)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
+    with p1:
+        if st.button("▶", help="右へ"):
+            viz.pan_by_data(-step_x, 0.0)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
+    with p2:
+        if st.button("▲", help="上へ"):
+            viz.pan_by_data(0.0, -step_y)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
+    with p3:
+        if st.button("▼", help="下へ"):
+            viz.pan_by_data(0.0, step_y)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
 
-        st.subheader("関数 f(x)")
-        r1, r2 = st.columns(2)
-        with r1:
-            if st.button("x"):
-                st.session_state.func_expr_key = "x"
-                _rerun_fragment()
-            if st.button("x**2"):
-                st.session_state.func_expr_key = "x**2"
-                _rerun_fragment()
-        with r2:
-            if st.button("sqrt(x)"):
-                st.session_state.func_expr_key = "sqrt(x)"
-                _rerun_fragment()
-            if st.button("±", help="現在の式の符号を反転"):
-                viz.a = float(st.session_state.sa)
-                viz.epsilon = float(st.session_state.seps)
-                viz.delta = float(st.session_state.sdelta)
-                viz.b = float(st.session_state.sb)
-                viz.negate_function(None)
-                st.session_state.func_expr_key = viz.function_expr
-                _rerun_fragment()
+    if st.button("b を 0 に"):
+        st.session_state._ed_b_zero = True
+        st.rerun()
+    z1, z2 = st.columns(2)
+    with z1:
+        if st.button("拡大"):
+            viz.zoom_in(None)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
+    with z2:
+        if st.button("縮小"):
+            viz.zoom_out(None)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
+    if st.button("リセット（初期値・表示範囲）"):
+        st.session_state._ed_full_reset = True
+        st.rerun()
 
-        st.text_input(
-            "式（例: x**2, sqrt(x)）",
-            key="func_expr_key",
-        )
-
-        st.subheader("表示")
-        st.caption(
-            "クラウド版は画像表示のためグラフ上のドラッグは使えません。"
-            "矢印で見る範囲を移動できます。"
-        )
-        xlim = viz.ax.get_xlim()
-        ylim = viz.ax.get_ylim()
-        step_x = 0.12 * (xlim[1] - xlim[0])
-        step_y = 0.12 * (ylim[1] - ylim[0])
-        p0, p1, p2, p3 = st.columns(4)
-        with p0:
-            if st.button("◀", help="左へ"):
-                viz.pan_by_data(step_x, 0.0)
-                st.session_state.view_xlim = tuple(viz.ax.get_xlim())
-                st.session_state.view_ylim = tuple(viz.ax.get_ylim())
-                _rerun_fragment()
-        with p1:
-            if st.button("▶", help="右へ"):
-                viz.pan_by_data(-step_x, 0.0)
-                st.session_state.view_xlim = tuple(viz.ax.get_xlim())
-                st.session_state.view_ylim = tuple(viz.ax.get_ylim())
-                _rerun_fragment()
-        with p2:
-            if st.button("▲", help="上へ"):
-                viz.pan_by_data(0.0, -step_y)
-                st.session_state.view_xlim = tuple(viz.ax.get_xlim())
-                st.session_state.view_ylim = tuple(viz.ax.get_ylim())
-                _rerun_fragment()
-        with p3:
-            if st.button("▼", help="下へ"):
-                viz.pan_by_data(0.0, step_y)
-                st.session_state.view_xlim = tuple(viz.ax.get_xlim())
-                st.session_state.view_ylim = tuple(viz.ax.get_ylim())
-                _rerun_fragment()
-
-        if st.button("b を 0 に"):
-            st.session_state._ed_b_zero = True
-            _rerun_fragment()
-        z1, z2 = st.columns(2)
-        with z1:
-            if st.button("拡大"):
-                viz.a = float(st.session_state.sa)
-                viz.epsilon = float(st.session_state.seps)
-                viz.delta = float(st.session_state.sdelta)
-                viz.b = float(st.session_state.sb)
-                viz.zoom_in(None)
-                st.session_state.view_xlim = tuple(viz.ax.get_xlim())
-                st.session_state.view_ylim = tuple(viz.ax.get_ylim())
-                _rerun_fragment()
-        with z2:
-            if st.button("縮小"):
-                viz.a = float(st.session_state.sa)
-                viz.epsilon = float(st.session_state.seps)
-                viz.delta = float(st.session_state.sdelta)
-                viz.b = float(st.session_state.sb)
-                viz.zoom_out(None)
-                st.session_state.view_xlim = tuple(viz.ax.get_xlim())
-                st.session_state.view_ylim = tuple(viz.ax.get_ylim())
-                _rerun_fragment()
-        if st.button("リセット（初期値・表示範囲）"):
-            st.session_state._ed_full_reset = True
-            _rerun_fragment()
-
-    _render_plot(viz)
-
-
-interactive_ui()
+_render_plot(viz)
