@@ -1408,22 +1408,6 @@ class EpsilonDeltaVisualizer:
 
         x1, x2 = self._compute_x1_x2(f_a, is_increasing, target_y_for_x1, target_y_for_x2)
 
-        if x1 is not None and x2 is not None and self.epsilon > 0:
-            band_left = min(x1, self.a)
-            band_right = max(x2, self.a)
-            if band_right > band_left:
-                eps_band = patches.Rectangle(
-                    (band_left, f_a - self.epsilon),
-                    band_right - band_left,
-                    2 * self.epsilon,
-                    facecolor=self.colors["accent"],
-                    alpha=0.25,
-                    edgecolor="none",
-                    linewidth=0,
-                    zorder=3,
-                )
-                self.ax.add_patch(eps_band)
-
         # D6領域の作成（白色四角形）
         # 説明: x=0からx=aまでの範囲で、y=f(a)からy=f(a)+bまでの矩形領域
         # この領域は、不連続点x=aにおける関数の値の差（b）を視覚化するために使用されます
@@ -1457,45 +1441,37 @@ class EpsilonDeltaVisualizer:
         # 単調増加: x=0からx=aまでの範囲で、y=f(a)-εからy=f(a)までの領域
         # 単調減少: x=0からx=aまでの範囲で、y=f(a)からy=f(a)+εまでの領域（x軸基準で反転）
         if x1 is not None and x2 is not None:
-            # D1_1領域の頂点を定義
+            # D1_1: 左側の水平ε帯 + x1〜a の曲線ウェッジ（D2と y 方向で重ならない）
             d1_1_verts = []
-            
-            x_curve_d1_1 = np.linspace(0, self.a, 500)
-            y_curve_d1_1 = self.evaluate_function(x_curve_d1_1)
-            
+            x_left = min(x1, self.a)
+            x_curve_left = np.linspace(0, x_left, 300)
+            y_curve_left = self.evaluate_function(x_curve_left)
+            x_curve_mid = np.linspace(x_left, self.a, 300)
+            y_curve_mid = self.evaluate_function(x_curve_mid)
+
             if is_increasing:
-                # 単調増加の場合：f(a)-ε から f(a) の間
                 d1_1_verts.append((0, f_a_minus_epsilon))
-                valid_mask = ~np.isnan(y_curve_d1_1) & (y_curve_d1_1 >= f_a_minus_epsilon)
-                valid_indices = np.where(valid_mask)[0]
-                if len(valid_indices) > 0:
-                    x_right = x_curve_d1_1[valid_indices[-1]]
-                    for i in valid_indices:
-                        if not np.isnan(y_curve_d1_1[i]):
-                            d1_1_verts.append((x_curve_d1_1[i], y_curve_d1_1[i]))
-                    d1_1_verts.append((x_right, f_a_minus_epsilon))
-                    d1_1_verts.append((self.a, f_a))
-                else:
-                    d1_1_verts.append((self.a, f_a_minus_epsilon))
-                    d1_1_verts.append((self.a, f_a))
+                for x, y in zip(x_curve_left, y_curve_left):
+                    if not np.isnan(y) and y >= f_a_minus_epsilon:
+                        d1_1_verts.append((x, y))
+                d1_1_verts.append((x_left, f_a))
+                d1_1_verts.append((self.a, f_a))
+                for x, y in zip(x_curve_mid[::-1], y_curve_mid[::-1]):
+                    if not np.isnan(y) and y >= f_a_minus_epsilon:
+                        d1_1_verts.append((x, y))
                 d1_1_verts.append((0, f_a))
             else:
-                # 単調減少の場合：f(a)+ε から f(a) の間（x軸対称で反転）
                 d1_1_verts.append((0, f_a_plus_epsilon))
-                valid_mask = ~np.isnan(y_curve_d1_1) & (y_curve_d1_1 <= f_a_plus_epsilon)
-                valid_indices = np.where(valid_mask)[0]
-                if len(valid_indices) > 0:
-                    x_right = x_curve_d1_1[valid_indices[-1]]
-                    for i in valid_indices:
-                        if not np.isnan(y_curve_d1_1[i]):
-                            d1_1_verts.append((x_curve_d1_1[i], y_curve_d1_1[i]))
-                    d1_1_verts.append((x_right, f_a_plus_epsilon))
-                    d1_1_verts.append((self.a, f_a))
-                else:
-                    d1_1_verts.append((self.a, f_a_plus_epsilon))
-                    d1_1_verts.append((self.a, f_a))
+                for x, y in zip(x_curve_left, y_curve_left):
+                    if not np.isnan(y) and y <= f_a_plus_epsilon:
+                        d1_1_verts.append((x, y))
+                d1_1_verts.append((x_left, f_a))
+                d1_1_verts.append((self.a, f_a))
+                for x, y in zip(x_curve_mid[::-1], y_curve_mid[::-1]):
+                    if not np.isnan(y) and y <= f_a_plus_epsilon:
+                        d1_1_verts.append((x, y))
                 d1_1_verts.append((0, f_a))
-            
+
             # D1_1領域を描画
             if len(d1_1_verts) > 2:
                 d1_1_path = Path(d1_1_verts)
@@ -1594,24 +1570,14 @@ class EpsilonDeltaVisualizer:
             # ⑤: (a, f_a)
             # ⑥: (a, 0)
             if x_min < self.a:
-                x_curve_d2_1 = np.linspace(x_min, self.a, 1000)
-                y_curve_d2_1 = self.evaluate_function(x_curve_d2_1)
-                
-                d2_1_verts = []
-                # ①: 左下 (x_min, 0)
-                d2_1_verts.append((x_min, 0))
-                # ⑥: (a, 0)
-                d2_1_verts.append((self.a, 0))
-                # ⑤: (a, f_a)
-                d2_1_verts.append((self.a, f_a))
-                # ④: 左上 - 曲線上の点（x_minからaまで）（NaNをスキップ）
-                for i in range(len(x_curve_d2_1)-1, -1, -1):
-                    x, y = x_curve_d2_1[i], y_curve_d2_1[i]
-                    # 単調増加の場合: y >= 0、単調減少の場合: y <= 0
-                    if not np.isnan(y):
-                        if (is_increasing and y >= 0) or (not is_increasing and y <= 0):
-                            d2_1_verts.append((x, y))
-                
+                eps_boundary = f_a_minus_epsilon if is_increasing else f_a_plus_epsilon
+                d2_1_verts = [
+                    (x_min, 0),
+                    (self.a, 0),
+                    (self.a, eps_boundary),
+                    (x_min, eps_boundary),
+                ]
+
                 if len(d2_1_verts) > 2:
                     d2_1_path = Path(d2_1_verts)
                     d2_1_patch = patches.PathPatch(d2_1_path, facecolor='#E74C3C', 
@@ -1675,50 +1641,35 @@ class EpsilonDeltaVisualizer:
                 d2_2_verts = []
                 
                 if is_increasing:
-                    # 単調増加の場合: x軸から曲線まで（上向き）
-                    # ⑦: (x0_d2, 0)
+                    # 単調増加: x 軸から y=f(a) まで（D1_2 と重ならない）
+                    y_top_right = min(f_x_max_plus_b, f_a)
+                    y_top_left = min(y0_d2, f_a)
                     d2_2_verts.append((x0_d2, 0))
-                    # ②: 右下 (x_max, 0)
                     d2_2_verts.append((x_max, 0))
-                    # ③: 右上 (x_max, f(x_max)+b)
-                    d2_2_verts.append((x_max, f_x_max_plus_b))
-                    # ③から⑧までf(x)+b曲線上の点（x_maxからx0_d2まで逆順）
+                    d2_2_verts.append((x_max, y_top_right))
                     if x_max > x0_d2:
                         x_curve_d2_2 = np.linspace(x0_d2, x_max, 1000)
                         y_curve_d2_2 = self.evaluate_f_plus_b(x_curve_d2_2)
-                        for i in range(len(x_curve_d2_2)-1, -1, -1):
-                            x, y = x_curve_d2_2[i], y_curve_d2_2[i]
-                            if not np.isnan(y) and y >= 0:
+                        for x, y in zip(x_curve_d2_2[::-1], y_curve_d2_2[::-1]):
+                            if not np.isnan(y) and 0 <= y <= f_a:
                                 d2_2_verts.append((x, y))
-                    # ⑧: (x0_d2, y0_d2)
                     if x0_d2 < x_max:
-                        d2_2_verts.append((x0_d2, y0_d2))
+                        d2_2_verts.append((x0_d2, y_top_left))
                 else:
-                    # 単調減少の場合: x軸から曲線まで
-                    # 単調増加と同じ構造で、bの符号が反転：
-                    # - 単調減少でb<=0 → 単調増加でb>=0と対称
-                    # - 単調減少でb>0 → 単調増加でb<0と対称
-                    
-                    # 曲線上の点を取得
-                    x_curve_d2_2 = np.linspace(x0_d2, x_max, 1000)
-                    y_curve_d2_2 = self.evaluate_f_plus_b(x_curve_d2_2)
-                    
-                    # 単調増加と同じ構造で描画
-                    # ⑦: (x0_d2, 0)
+                    # 単調減少: x 軸から y=f(a) まで（D1_2 と重ならない）
+                    y_top_right = max(f_x_max_plus_b, f_a)
+                    y_top_left = max(y0_d2, f_a)
                     d2_2_verts.append((x0_d2, 0))
-                    # ②: 右端 (x_max, 0)
                     d2_2_verts.append((x_max, 0))
-                    # ③: (x_max, f(x_max)+b)
-                    d2_2_verts.append((x_max, f_x_max_plus_b))
-                    # ③から⑧までf(x)+b曲線上の点（x_maxからx0_d2まで逆順）
+                    d2_2_verts.append((x_max, y_top_right))
                     if x_max > x0_d2:
-                        for i in range(len(x_curve_d2_2)-1, -1, -1):
-                            x, y = x_curve_d2_2[i], y_curve_d2_2[i]
-                            if not np.isnan(y) and y <= 0:
+                        x_curve_d2_2 = np.linspace(x0_d2, x_max, 1000)
+                        y_curve_d2_2 = self.evaluate_f_plus_b(x_curve_d2_2)
+                        for x, y in zip(x_curve_d2_2[::-1], y_curve_d2_2[::-1]):
+                            if not np.isnan(y) and y >= 0 and y <= f_a:
                                 d2_2_verts.append((x, y))
-                    # ⑧: (x0_d2, y0_d2)
                     if x0_d2 < x_max:
-                        d2_2_verts.append((x0_d2, y0_d2))
+                        d2_2_verts.append((x0_d2, y_top_left))
                 
                 if len(d2_2_verts) > 2:
                     d2_2_path = Path(d2_2_verts)
@@ -1930,8 +1881,11 @@ class EpsilonDeltaVisualizer:
                     d1_2_verts.append((x2, f_a_plus_epsilon))
                     d1_2_verts.append((0, f_a_plus_epsilon))
                 else:
+                    x_left = min(x1, self.a)
                     d1_2_verts.append((0, f_a))
-                    d1_2_verts.append((self.a, f_a))
+                    d1_2_verts.append((0, f_a_plus_epsilon))
+                    d1_2_verts.append((x_left, f_a_plus_epsilon))
+                    d1_2_verts.append((x_left, f_a))
                     if x2 > self.a:
                         x_start = self.a
                         x_candidates_start = np.linspace(self.a, x2, 1000)
@@ -1951,7 +1905,8 @@ class EpsilonDeltaVisualizer:
                                         if x_intersect >= self.a and x_intersect <= x2:
                                             x_start = x_intersect
                                             break
-                        
+
+                        d1_2_verts.append((self.a, f_a))
                         x_curve_fxpb = np.linspace(x_start, x2, 100)
                         y_curve_fxpb = self.evaluate_f_plus_b(x_curve_fxpb)
                         for x, y in zip(x_curve_fxpb, y_curve_fxpb):
@@ -1976,9 +1931,11 @@ class EpsilonDeltaVisualizer:
                     d1_2_verts.append((x2, f_a_minus_epsilon))
                     d1_2_verts.append((0, f_a_minus_epsilon))
                 else:
-                    # b <= 0のとき：x=aから開始（単調増加のb>=0と対称構造）
+                    x_left = min(x1, self.a)
                     d1_2_verts.append((0, f_a))
-                    d1_2_verts.append((self.a, f_a))
+                    d1_2_verts.append((0, f_a_minus_epsilon))
+                    d1_2_verts.append((x_left, f_a_minus_epsilon))
+                    d1_2_verts.append((x_left, f_a))
                     if x2 > self.a:
                         x_start = self.a
                         x_candidates_start = np.linspace(self.a, x2, 1000)
@@ -1998,7 +1955,8 @@ class EpsilonDeltaVisualizer:
                                         if x_intersect >= self.a and x_intersect <= x2:
                                             x_start = x_intersect
                                             break
-                        
+
+                        d1_2_verts.append((self.a, f_a))
                         x_curve_fxpb = np.linspace(x_start, x2, 100)
                         y_curve_fxpb = self.evaluate_f_plus_b(x_curve_fxpb)
                         for x, y in zip(x_curve_fxpb, y_curve_fxpb):
