@@ -103,7 +103,7 @@ st.set_page_config(
     },
 )
 
-# 右上のメニュー（⋮）・Deploy・「展開する」等のヘッダー付近 UI を非表示
+# 右上のメニュー（⋮）・Deploy 等を非表示。サイドバーは常に開いたままにする。
 st.markdown(
     """
     <style>
@@ -113,13 +113,76 @@ st.markdown(
         div[data-testid="stToolbar"] {display: none;}
         div[data-testid="stDecoration"] {display: none;}
         div[data-testid="stAppDeployButton"] {display: none;}
+
+        /* 折りたたみ・展開ボタン（Streamlit バージョン差を吸収） */
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stExpandSidebarButton"],
         [data-testid="stSidebarCollapsedControl"],
         [data-testid="collapsedControl"] {
             display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            opacity: 0 !important;
+        }
+
+        /* 折りたたみ状態になってもサイドバーを表示し続ける */
+        section[data-testid="stSidebar"],
+        [data-testid="stSidebar"] {
+            transform: translateX(0) !important;
+            visibility: visible !important;
+            min-width: 16rem !important;
+        }
+        [data-testid="stSidebar"][aria-expanded="false"] {
+            transform: translateX(0) !important;
+            margin-left: 0 !important;
+        }
+        [data-testid="stSidebarContent"] {
+            opacity: 1 !important;
+            visibility: visible !important;
         }
     </style>
     """,
     unsafe_allow_html=True,
+)
+
+# 保存済みの折りたたみ状態を上書きし、再描画後もボタンを無効化
+st.components.v1.html(
+    """
+    <script>
+    (function () {
+        const doc = window.parent.document;
+        const hideControls = () => {
+            doc.querySelectorAll(
+                '[data-testid="stSidebarCollapseButton"],' +
+                '[data-testid="stExpandSidebarButton"],' +
+                '[data-testid="stSidebarCollapsedControl"],' +
+                '[data-testid="collapsedControl"]'
+            ).forEach((el) => {
+                el.style.display = "none";
+                el.style.pointerEvents = "none";
+            });
+            const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+            if (sidebar) {
+                sidebar.setAttribute("aria-expanded", "true");
+                sidebar.style.transform = "translateX(0)";
+            }
+            Object.keys(window.parent.localStorage).forEach((key) => {
+                if (key.startsWith("stSidebarCollapsed")) {
+                    window.parent.localStorage.setItem(key, "false");
+                }
+            });
+        };
+        hideControls();
+        window.setTimeout(hideControls, 100);
+        window.setTimeout(hideControls, 500);
+    })();
+    </script>
+    """,
+    height=0,
+    width=0,
 )
 
 st.title("ε-δ論法")
