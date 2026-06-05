@@ -35,7 +35,7 @@ class EpsilonDeltaVisualizer:
         self.setup_modern_style()
         
         if streamlit_mode:
-            self.fig, self.ax = plt.subplots(figsize=(10, 7), dpi=100)
+            self.fig, self.ax = plt.subplots(figsize=(8, 5), dpi=72)
         else:
             self.fig, self.ax = plt.subplots(figsize=(16, 10))
         plt.subplots_adjust(left=0.06, bottom=0.1, right=0.58, top=0.95)
@@ -231,121 +231,42 @@ class EpsilonDeltaVisualizer:
         self.ax.set_ylim(ylim[0] - dy, ylim[1] - dy)
         self._refresh_data_after_pan_or_zoom()
 
-    def zoom_in(self, event):
-        """拡大ボタン"""
-        # 拡大縮小の中心点を(a, f(a))に設定
-        f_a = self.evaluate_function(np.array([self.a]))[0]
-        # f_aがNaNの場合は0を使用
-        if np.isnan(f_a):
-            f_a = 0.0
-        x_center = self.a
-        y_center = f_a
-        
-        # 拡大の倍率
-        zoom_factor = 1.2
-        
-        # 現在の範囲を取得
+    def _zoom_viewport(self, zoom_factor: float) -> None:
+        """現在の表示中心を保ったまま拡大縮小（zoom_factor > 1 で拡大）"""
         xlim = self.ax.get_xlim()
         ylim = self.ax.get_ylim()
-        
-        # 新しい範囲を計算
-        x_range = xlim[1] - xlim[0]
-        y_range = ylim[1] - ylim[0]
-        
-        new_x_range = x_range / zoom_factor
-        new_y_range = y_range / zoom_factor
-        
-        # 中心点を基準に範囲を調整
-        new_xlim = [x_center - new_x_range/2, x_center + new_x_range/2]
-        new_ylim = [y_center - new_y_range/2, y_center + new_y_range/2]
-        
-        # 範囲を設定
-        self.ax.set_xlim(new_xlim)
-        self.ax.set_ylim(new_ylim)
-        
-        # 表示範囲に応じてxデータを更新
-        self.update_x_data()
-        
-        # 関数の線を更新
-        x_f = self.x[self.x <= self.a]
-        if len(x_f) > 0 and x_f[-1] < self.a:
-            x_f = np.append(x_f, self.a)
-        y_f = self.evaluate_f(x_f)
-        self.line_f.set_xdata(x_f)
-        self.line_f.set_ydata(y_f)
-        
-        x_f_plus_b = self.x[self.x >= self.a]
-        if len(x_f_plus_b) > 0 and x_f_plus_b[0] > self.a:
-            x_f_plus_b = np.insert(x_f_plus_b, 0, self.a)
-        y_f_plus_b = self.evaluate_f_plus_b(x_f_plus_b)
-        self.line_f_plus_b.set_xdata(x_f_plus_b)
-        self.line_f_plus_b.set_ydata(y_f_plus_b)
-        
-        self.y = self.evaluate_function(self.x)
-        self.line.set_xdata(self.x)
-        self.line.set_ydata(self.y)
-        
-        self.ax.set_aspect("equal", adjustable="box")
-        self.draw_axes()
-        self.fig.canvas.draw_idle()
+        x_center = 0.5 * (xlim[0] + xlim[1])
+        y_center = 0.5 * (ylim[0] + ylim[1])
+        x_range = (xlim[1] - xlim[0]) / zoom_factor
+        y_range = (ylim[1] - ylim[0]) / zoom_factor
+
+        # 正方形マス目と整合するよう、拡大時は狭い方に合わせて縮小（逆に広げない）
+        pos = self.ax.get_position()
+        if pos.height > 1e-9 and x_range > 0 and y_range > 0:
+            box_aspect = pos.width / pos.height
+            data_aspect = x_range / y_range
+            if zoom_factor > 1:
+                if data_aspect > box_aspect:
+                    x_range = y_range * box_aspect
+                else:
+                    y_range = x_range / box_aspect
+            else:
+                if data_aspect > box_aspect:
+                    y_range = x_range / box_aspect
+                else:
+                    x_range = y_range * box_aspect
+
+        self.ax.set_xlim(x_center - x_range / 2, x_center + x_range / 2)
+        self.ax.set_ylim(y_center - y_range / 2, y_center + y_range / 2)
+        self._refresh_data_after_pan_or_zoom()
+
+    def zoom_in(self, event):
+        """拡大ボタン"""
+        self._zoom_viewport(1.2)
 
     def zoom_out(self, event):
         """縮小ボタン"""
-        # 拡大縮小の中心点を(a, f(a))に設定
-        f_a = self.evaluate_function(np.array([self.a]))[0]
-        # f_aがNaNの場合は0を使用
-        if np.isnan(f_a):
-            f_a = 0.0
-        x_center = self.a
-        y_center = f_a
-        
-        # 縮小の倍率
-        zoom_factor = 1/1.2
-        
-        # 現在の範囲を取得
-        xlim = self.ax.get_xlim()
-        ylim = self.ax.get_ylim()
-        
-        # 新しい範囲を計算
-        x_range = xlim[1] - xlim[0]
-        y_range = ylim[1] - ylim[0]
-        
-        new_x_range = x_range / zoom_factor
-        new_y_range = y_range / zoom_factor
-        
-        # 中心点を基準に範囲を調整
-        new_xlim = [x_center - new_x_range/2, x_center + new_x_range/2]
-        new_ylim = [y_center - new_y_range/2, y_center + new_y_range/2]
-        
-        # 範囲を設定
-        self.ax.set_xlim(new_xlim)
-        self.ax.set_ylim(new_ylim)
-        
-        # 表示範囲に応じてxデータを更新
-        self.update_x_data()
-        
-        # 関数の線を更新
-        x_f = self.x[self.x <= self.a]
-        if len(x_f) > 0 and x_f[-1] < self.a:
-            x_f = np.append(x_f, self.a)
-        y_f = self.evaluate_f(x_f)
-        self.line_f.set_xdata(x_f)
-        self.line_f.set_ydata(y_f)
-        
-        x_f_plus_b = self.x[self.x >= self.a]
-        if len(x_f_plus_b) > 0 and x_f_plus_b[0] > self.a:
-            x_f_plus_b = np.insert(x_f_plus_b, 0, self.a)
-        y_f_plus_b = self.evaluate_f_plus_b(x_f_plus_b)
-        self.line_f_plus_b.set_xdata(x_f_plus_b)
-        self.line_f_plus_b.set_ydata(y_f_plus_b)
-        
-        self.y = self.evaluate_function(self.x)
-        self.line.set_xdata(self.x)
-        self.line.set_ydata(self.y)
-        
-        self.ax.set_aspect("equal", adjustable="box")
-        self.draw_axes()
-        self.fig.canvas.draw_idle()
+        self._zoom_viewport(1 / 1.2)
 
     def on_press(self, event):
         """マウスボタン押下"""
@@ -594,7 +515,7 @@ class EpsilonDeltaVisualizer:
         # 解像度を維持（範囲に応じて点数を調整）
         num_points = max(1000, int((x_max - x_min) * 200))
         if self._streamlit_mode:
-            num_points = min(num_points, 1000)
+            num_points = min(num_points, 600)
         new_x = np.linspace(x_min, x_max, num_points)
         # サイズが変わった場合のみ更新（パフォーマンス向上）
         if len(self.x) != len(new_x) or not np.allclose(self.x, new_x, rtol=1e-10):
@@ -833,7 +754,14 @@ class EpsilonDeltaVisualizer:
     
     def find_intersections(self, target_y, min_x=-3, max_x=3, jump_exclude=False):
         """関数と水平線の交点を求める（jump_exclude=Trueなら不連続点x=aをまたぐ交点は除外）"""
-        num_points = 1500 if self._streamlit_mode else 5000
+        if self._streamlit_mode:
+            xlim = self.ax.get_xlim()
+            margin = (xlim[1] - xlim[0]) * 0.25
+            min_x = max(min_x, xlim[0] - margin)
+            max_x = min(max_x, xlim[1] + margin)
+            num_points = 800
+        else:
+            num_points = 5000
         x = np.linspace(min_x, max_x, num_points)
         y = self.evaluate_function(x)
         
@@ -1356,11 +1284,11 @@ class EpsilonDeltaVisualizer:
         self.line_f_plus_b.set_xdata(x_f_plus_b)
         self.line_f_plus_b.set_ydata(y_f_plus_b)
         
-        # 全体の関数（後方互換性のため）
-        self.y = self.evaluate_function(self.x)
-        self.line.set_xdata(self.x)
-        self.line.set_ydata(self.y)
-        
+        if not self._streamlit_mode:
+            self.y = self.evaluate_function(self.x)
+            self.line.set_xdata(self.x)
+            self.line.set_ydata(self.y)
+
         # f(a)の値を高精度で計算
         f_a = self.evaluate_function(np.array([self.a]))[0]
         # f_aがNaNの場合、0を使用（sqrt(x)でa < 0の場合など）
@@ -1381,16 +1309,14 @@ class EpsilonDeltaVisualizer:
         if np.isnan(y2):
             y2 = f_a
         
-        # 数値精度の向上：微小な値でも正確に計算
-        if abs(self.delta) < 1e-6:
-            # 非常に小さいδの場合、より高精度な計算を使用
+        if not self._streamlit_mode and abs(self.delta) < 1e-6:
             y1_temp = self.evaluate_function(np.array([a_minus_delta]))[0]
             y2_temp = self.evaluate_function(np.array([a_plus_delta]))[0]
             if not np.isnan(y1_temp):
                 y1 = y1_temp
             if not np.isnan(y2_temp):
                 y2 = y2_temp
-        
+
         # y座標でf(a)からε離れた点を設定
         f_a_plus_epsilon = f_a + self.epsilon
         f_a_minus_epsilon = f_a - self.epsilon
@@ -1415,8 +1341,16 @@ class EpsilonDeltaVisualizer:
             target_y_for_x1 = f_a_plus_epsilon
             target_y_for_x2 = f_a_minus_epsilon
         
-        # x1: 関数f(x)と水平線y=target_y_for_x1の交点（ジャンプ除外ON、高精度）
-        intersections_for_x1 = self.find_intersections(target_y_for_x1, -3, 3, jump_exclude=True)
+        if self._streamlit_mode:
+            xlim = self.ax.get_xlim()
+            ix_margin = (xlim[1] - xlim[0]) * 0.5
+            ix_min = xlim[0] - ix_margin
+            ix_max = xlim[1] + ix_margin
+        else:
+            ix_min, ix_max = -3, 3
+        intersections_for_x1 = self.find_intersections(
+            target_y_for_x1, ix_min, ix_max, jump_exclude=True
+        )
         
         # x2: 関数f(x)+bと水平線y=target_y_for_x2の交点
         # f(x)+b = target_y_for_x2 を満たすx座標（x >= aの範囲で）
@@ -2454,8 +2388,10 @@ class EpsilonDeltaVisualizer:
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
                             edgecolor='none', alpha=0.8), zorder=15)
         
-        # グラフの更新
-        self.fig.canvas.draw_idle()
+        if self._streamlit_mode:
+            self.fig.canvas.draw()
+        else:
+            self.fig.canvas.draw_idle()
 
 if __name__ == "__main__":
     visualizer = EpsilonDeltaVisualizer()
