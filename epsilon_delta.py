@@ -71,18 +71,9 @@ class EpsilonDeltaVisualizer:
         # マス目を正方形にする（データ座標で縦横1単位が同じ長さ）
         self.ax.set_aspect("equal", adjustable="box")
         
-        # メイン軸の強調
-        self.ax.axhline(y=0, color=self.colors['primary'], linestyle='-', alpha=0.8, linewidth=2, zorder=5)
-        self.ax.axvline(x=0, color=self.colors['primary'], linestyle='-', alpha=0.8, linewidth=2, zorder=5)
-        
-        # 軸のスタイリング（シンプル）
-        # グラフの境界線を表示
-        self.ax.spines['top'].set_visible(False)
-        self.ax.spines['right'].set_visible(False)
-        self.ax.spines['left'].set_color(self.colors['primary'])
-        self.ax.spines['left'].set_linewidth(1.5)
-        self.ax.spines['bottom'].set_color(self.colors['primary'])
-        self.ax.spines['bottom'].set_linewidth(1.5)
+        # 軸のスタイリング（軸線は描画せず、数値ラベルのみ draw_axes で表示）
+        for spine in self.ax.spines.values():
+            spine.set_visible(False)
         # x軸とy軸に目盛りを表示（初期設定、draw_axesで動的に更新）
         self.ax.tick_params(colors=self.colors['text'], labelsize=10, width=1, length=5, 
                            bottom=True, top=False, left=True, right=False,
@@ -142,11 +133,8 @@ class EpsilonDeltaVisualizer:
         # 初期描画
         self.update(None)
         
-        # 起動時にx軸とy軸を確実に表示
         self.ax.set_xlim(*self.initial_xlim)
         self.ax.set_ylim(*self.initial_ylim)
-        self.ax.axhline(y=0, color=self.colors['primary'], linestyle='-', alpha=0.8, linewidth=2, zorder=5)
-        self.ax.axvline(x=0, color=self.colors['primary'], linestyle='-', alpha=0.8, linewidth=2, zorder=5)
     
     def setup_modern_style(self):
         """シンプルで洗練されたスタイルを設定"""
@@ -239,34 +227,18 @@ class EpsilonDeltaVisualizer:
         y_center = 0.5 * (ylim[0] + ylim[1])
         x_range = (xlim[1] - xlim[0]) / zoom_factor
         y_range = (ylim[1] - ylim[0]) / zoom_factor
-
-        # 正方形マス目と整合するよう、拡大時は狭い方に合わせて縮小（逆に広げない）
-        pos = self.ax.get_position()
-        if pos.height > 1e-9 and x_range > 0 and y_range > 0:
-            box_aspect = pos.width / pos.height
-            data_aspect = x_range / y_range
-            if zoom_factor > 1:
-                if data_aspect > box_aspect:
-                    x_range = y_range * box_aspect
-                else:
-                    y_range = x_range / box_aspect
-            else:
-                if data_aspect > box_aspect:
-                    y_range = x_range / box_aspect
-                else:
-                    x_range = y_range * box_aspect
-
         self.ax.set_xlim(x_center - x_range / 2, x_center + x_range / 2)
         self.ax.set_ylim(y_center - y_range / 2, y_center + y_range / 2)
+        self._draw_axes_state = None
         self._refresh_data_after_pan_or_zoom()
 
     def zoom_in(self, event):
         """拡大ボタン"""
-        self._zoom_viewport(1.2)
+        self._zoom_viewport(1.08)
 
     def zoom_out(self, event):
         """縮小ボタン"""
-        self._zoom_viewport(1 / 1.2)
+        self._zoom_viewport(1 / 1.08)
 
     def on_press(self, event):
         """マウスボタン押下"""
@@ -521,8 +493,17 @@ class EpsilonDeltaVisualizer:
         if len(self.x) != len(new_x) or not np.allclose(self.x, new_x, rtol=1e-10):
             self.x = new_x
     
+    def _format_tick_label(self, value: float, tick_interval: float) -> str:
+        if tick_interval < 0.1:
+            return f"{value:.2f}"
+        if tick_interval < 1:
+            return f"{value:.1f}"
+        if tick_interval < 2:
+            return f"{value:.1f}" if value != int(value) else f"{int(value)}"
+        return f"{int(value)}"
+
     def draw_axes(self):
-        """x軸とy軸を確実に描画"""
+        """目盛り数値のみ表示（軸線・目盛り線は描画しない）"""
         xlim = self.ax.get_xlim()
         ylim = self.ax.get_ylim()
         axes_state = (
@@ -631,126 +612,44 @@ class EpsilonDeltaVisualizer:
         else:
             self.ax.yaxis.set_major_formatter(ticker.ScalarFormatter())
         
-        # x軸（y=0）が表示範囲内にある場合のみ描画
+        x_ticks = self.ax.xaxis.get_majorticklocs()
+        y_ticks = self.ax.yaxis.get_majorticklocs()
+        x_label_pad = (ylim[1] - ylim[0]) * 0.03
+        y_label_pad = (xlim[1] - xlim[0]) * 0.03
+
+        self.x_axis_line = None
+        self.y_axis_line = None
+        self.x_axis_ticks = []
+        self.y_axis_ticks = []
         self.x_axis_labels = []
-        self.x_axis_ticks = []  # x軸上の目盛り線を保持
-        x_axis_visible = ylim[0] <= 0 <= ylim[1]
-        if x_axis_visible:
-            self.x_axis_line = self.ax.axhline(y=0, color='#1A1A1A', linestyle='-', 
-                                             alpha=0.9, linewidth=2.5, zorder=5)
-            # 目盛り位置を取得
-            x_ticks = self.ax.xaxis.get_majorticklocs()
-            # x軸（y=0）上に目盛り（メモリ）を表示
-            for tick_x in x_ticks:
-                if xlim[0] <= tick_x <= xlim[1]:
-                    # x軸上の目盛り線を描画（短い縦線）
-                    tick_line = self.ax.plot([tick_x, tick_x], [0, (ylim[1] - ylim[0]) * 0.01], 
-                                           color='#1A1A1A', linewidth=1.5, zorder=6)
-                    self.x_axis_ticks.append(tick_line[0])
-            # x軸（y=0）の下に数値を表示
-            # 表示範囲内の目盛りのみ表示
-            for tick_x in x_ticks:
-                if xlim[0] <= tick_x <= xlim[1]:
-                    # x軸（y=0）の少し下にラベルを配置
-                    # y座標は0より少し下（データ座標で約0.05下）
-                    label_y = 0 - (ylim[1] - ylim[0]) * 0.02
-                    # 数値のフォーマット（0.01刻みまで対応）
-                    if x_tick_interval < 0.1:
-                        label_text = f'{tick_x:.2f}'
-                    elif x_tick_interval < 1:
-                        label_text = f'{tick_x:.1f}'
-                    elif x_tick_interval < 2:
-                        label_text = f'{tick_x:.1f}' if tick_x != int(tick_x) else f'{int(tick_x)}'
-                    else:
-                        label_text = f'{int(tick_x)}'
-                    label = self.ax.text(tick_x, label_y, label_text, 
-                                       ha='center', va='top',
-                                       fontsize=10, color=self.colors['text'],
-                                       zorder=15)
-                    self.x_axis_labels.append(label)
-        else:
-            # x軸が表示範囲外の場合、グラフの下端に数字を表示
-            self.x_axis_line = None
-            x_ticks = self.ax.xaxis.get_majorticklocs()
-            for tick_x in x_ticks:
-                if xlim[0] <= tick_x <= xlim[1]:
-                    # グラフの下端（ylim[0]）にラベルを配置
-                    label_y = ylim[0]
-                    # 数値のフォーマット（0.01刻みまで対応）
-                    if x_tick_interval < 0.1:
-                        label_text = f'{tick_x:.2f}'
-                    elif x_tick_interval < 1:
-                        label_text = f'{tick_x:.1f}'
-                    elif x_tick_interval < 2:
-                        label_text = f'{tick_x:.1f}' if tick_x != int(tick_x) else f'{int(tick_x)}'
-                    else:
-                        label_text = f'{int(tick_x)}'
-                    label = self.ax.text(tick_x, label_y, label_text, 
-                                       ha='center', va='top',
-                                       fontsize=10, color=self.colors['text'],
-                                       zorder=15)
-                    self.x_axis_labels.append(label)
-        
-        # y軸（x=0）が表示範囲内にある場合のみ描画
+        for tick_x in x_ticks:
+            if xlim[0] <= tick_x <= xlim[1]:
+                label = self.ax.text(
+                    tick_x,
+                    ylim[0] - x_label_pad,
+                    self._format_tick_label(tick_x, x_tick_interval),
+                    ha="center",
+                    va="top",
+                    fontsize=10,
+                    color=self.colors["text"],
+                    zorder=15,
+                )
+                self.x_axis_labels.append(label)
+
         self.y_axis_labels = []
-        self.y_axis_ticks = []  # y軸上の目盛り線を保持
-        y_axis_visible = xlim[0] <= 0 <= xlim[1]
-        if y_axis_visible:
-            self.y_axis_line = self.ax.axvline(x=0, color='#1A1A1A', linestyle='-', 
-                                              alpha=0.9, linewidth=2.5, zorder=5)
-            # y軸（x=0）上に目盛り（メモリ）を表示
-            y_ticks = self.ax.yaxis.get_majorticklocs()
-            for tick_y in y_ticks:
-                if ylim[0] <= tick_y <= ylim[1]:
-                    # y軸上の目盛り線を描画（短い横線）
-                    tick_line = self.ax.plot([0, (xlim[1] - xlim[0]) * 0.01], [tick_y, tick_y], 
-                                           color='#1A1A1A', linewidth=1.5, zorder=6)
-                    self.y_axis_ticks.append(tick_line[0])
-            # y軸（x=0）の左に数値を表示
-            # 目盛り位置を取得
-            y_ticks = self.ax.yaxis.get_majorticklocs()
-            # 表示範囲内の目盛りのみ表示
-            for tick_y in y_ticks:
-                if ylim[0] <= tick_y <= ylim[1]:
-                    # y軸（x=0）の少し左にラベルを配置
-                    # x座標は0より少し左（データ座標で約0.05左）
-                    label_x = 0 - (xlim[1] - xlim[0]) * 0.02
-                    # 数値のフォーマット（0.01刻みまで対応）
-                    if y_tick_interval < 0.1:
-                        label_text = f'{tick_y:.2f}'
-                    elif y_tick_interval < 1:
-                        label_text = f'{tick_y:.1f}'
-                    elif y_tick_interval < 2:
-                        label_text = f'{tick_y:.1f}' if tick_y != int(tick_y) else f'{int(tick_y)}'
-                    else:
-                        label_text = f'{int(tick_y)}'
-                    label = self.ax.text(label_x, tick_y, label_text, 
-                                       ha='right', va='center',
-                                       fontsize=10, color=self.colors['text'],
-                                       zorder=15)
-                    self.y_axis_labels.append(label)
-        else:
-            # y軸が表示範囲外の場合、グラフの左端に数字を表示
-            self.y_axis_line = None
-            y_ticks = self.ax.yaxis.get_majorticklocs()
-            for tick_y in y_ticks:
-                if ylim[0] <= tick_y <= ylim[1]:
-                    # グラフの左端（xlim[0]）にラベルを配置
-                    label_x = xlim[0]
-                    # 数値のフォーマット（0.01刻みまで対応）
-                    if y_tick_interval < 0.1:
-                        label_text = f'{tick_y:.2f}'
-                    elif y_tick_interval < 1:
-                        label_text = f'{tick_y:.1f}'
-                    elif y_tick_interval < 2:
-                        label_text = f'{tick_y:.1f}' if tick_y != int(tick_y) else f'{int(tick_y)}'
-                    else:
-                        label_text = f'{int(tick_y)}'
-                    label = self.ax.text(label_x, tick_y, label_text, 
-                                       ha='right', va='center',
-                                       fontsize=10, color=self.colors['text'],
-                                       zorder=15)
-                    self.y_axis_labels.append(label)
+        for tick_y in y_ticks:
+            if ylim[0] <= tick_y <= ylim[1]:
+                label = self.ax.text(
+                    xlim[0] - y_label_pad,
+                    tick_y,
+                    self._format_tick_label(tick_y, y_tick_interval),
+                    ha="right",
+                    va="center",
+                    fontsize=10,
+                    color=self.colors["text"],
+                    zorder=15,
+                )
+                self.y_axis_labels.append(label)
     
     def find_intersections(self, target_y, min_x=-3, max_x=3, jump_exclude=False):
         """関数と水平線の交点を求める（jump_exclude=Trueなら不連続点x=aをまたぐ交点は除外）"""
