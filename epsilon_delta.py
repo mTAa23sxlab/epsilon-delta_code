@@ -888,40 +888,41 @@ class EpsilonDeltaVisualizer:
             )
         )
 
-    def _build_d1_1_verts(self, f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing):
+    def _build_d1_1_verts(
+        self, f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing, x1=None
+    ):
+        """P1: 左水平 ε 帯 [0,x₁]×[f(a)∓ε,f(a)] ＋ 曲線より上のウェッジ [x₁,a]"""
         verts = []
-        x_curve = np.linspace(0, self.a, 500)
-        y_curve = self.evaluate_function(x_curve)
         if is_increasing:
-            verts.append((0, f_a_minus_epsilon))
-            valid_mask = ~np.isnan(y_curve) & (y_curve >= f_a_minus_epsilon)
-            valid_indices = np.where(valid_mask)[0]
-            if len(valid_indices) > 0:
-                x_right = x_curve[valid_indices[-1]]
-                for i in valid_indices:
-                    if not np.isnan(y_curve[i]):
-                        verts.append((x_curve[i], y_curve[i]))
-                verts.append((x_right, f_a_minus_epsilon))
-                verts.append((self.a, f_a))
+            eps_y = f_a_minus_epsilon
+            verts.append((0.0, eps_y))
+            if x1 is not None and x1 < self.a - 1e-15:
+                x_left = float(x1)
+                verts.append((x_left, eps_y))
+                x_curve = np.linspace(x_left, self.a, 500)
+                y_curve = self.evaluate_function(x_curve)
+                for x, y in zip(x_curve, y_curve):
+                    if not np.isnan(y):
+                        verts.append((float(x), float(y)))
             else:
-                verts.append((self.a, f_a_minus_epsilon))
-                verts.append((self.a, f_a))
-            verts.append((0, f_a))
+                verts.append((self.a, eps_y))
+            verts.append((self.a, f_a))
+            verts.append((0.0, f_a))
         else:
-            verts.append((0, f_a_plus_epsilon))
-            valid_mask = ~np.isnan(y_curve) & (y_curve <= f_a_plus_epsilon)
-            valid_indices = np.where(valid_mask)[0]
-            if len(valid_indices) > 0:
-                x_right = x_curve[valid_indices[-1]]
-                for i in valid_indices:
-                    if not np.isnan(y_curve[i]):
-                        verts.append((x_curve[i], y_curve[i]))
-                verts.append((x_right, f_a_plus_epsilon))
-                verts.append((self.a, f_a))
+            eps_y = f_a_plus_epsilon
+            verts.append((0.0, eps_y))
+            if x1 is not None and x1 < self.a - 1e-15:
+                x_left = float(x1)
+                verts.append((x_left, eps_y))
+                x_curve = np.linspace(x_left, self.a, 500)
+                y_curve = self.evaluate_function(x_curve)
+                for x, y in zip(x_curve, y_curve):
+                    if not np.isnan(y):
+                        verts.append((float(x), float(y)))
             else:
-                verts.append((self.a, f_a_plus_epsilon))
-                verts.append((self.a, f_a))
-            verts.append((0, f_a))
+                verts.append((self.a, eps_y))
+            verts.append((self.a, f_a))
+            verts.append((0.0, f_a))
         return verts
 
     def _build_d1_2_verts_b0(self, x2, f_a, f_a_plus_epsilon, f_a_minus_epsilon, is_increasing):
@@ -1026,7 +1027,9 @@ class EpsilonDeltaVisualizer:
         self, x1, x2, f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing
     ):
         subpaths = [
-            self._build_d1_1_verts(f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing),
+            self._build_d1_1_verts(
+                f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing, x1
+            ),
             self._build_d2_1_verts_b0(x1, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing),
             self._build_d2_2_verts_b0(x2, f_a, is_increasing),
             self._build_d1_2_verts_b0(x2, f_a, f_a_plus_epsilon, f_a_minus_epsilon, is_increasing),
@@ -1617,7 +1620,7 @@ class EpsilonDeltaVisualizer:
                 )
             else:
                 d1_1_verts = self._build_d1_1_verts(
-                    f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing
+                    f_a, f_a_minus_epsilon, f_a_plus_epsilon, is_increasing, x1
                 )
                 if len(d1_1_verts) > 2:
                     d1_1_path = Path(d1_1_verts)
