@@ -38,10 +38,10 @@ class EpsilonDeltaVisualizer:
         plt.subplots_adjust(left=0.06, bottom=0.1, right=0.58, top=0.95)
         
         # 初期値の設定
-        self.a = 1.5
-        self.epsilon = 0.8
+        self.a = 1.0
+        self.epsilon = 0.5
         self.delta = 0.5
-        self.b = 0.0  # bの初期値を追加
+        self.b = 0.0
         self.function_expr = 'x**2'
         
         # 初期値を保存
@@ -52,16 +52,12 @@ class EpsilonDeltaVisualizer:
         self.initial_function_expr = self.function_expr
         
         # 拡大縮小用の初期範囲を保存
-        self.initial_xlim = (-1, 5)
-        self.initial_ylim = (-1, 5)
+        self.initial_xlim = (-1.2, 3.2)
+        self.initial_ylim = (-0.7, 2.7)
         
         # グラフの設定
-        self.ax.set_xlim(-1, 5)
-        self.ax.set_ylim(-1, 5)  # y軸の範囲を-1から5に変更
-        
-        # x軸とy軸を確実に表示するため、範囲を調整
-        self.ax.set_xlim(-1, 5)
-        self.ax.set_ylim(-1, 5)
+        self.ax.set_xlim(*self.initial_xlim)
+        self.ax.set_ylim(*self.initial_ylim)
         
         # シンプルなグリッドと軸の設定
         self.ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5, color=self.colors['grid'], zorder=1)
@@ -141,8 +137,8 @@ class EpsilonDeltaVisualizer:
         self.update(None)
         
         # 起動時にx軸とy軸を確実に表示
-        self.ax.set_xlim(-1, 5)
-        self.ax.set_ylim(-1, 5)
+        self.ax.set_xlim(*self.initial_xlim)
+        self.ax.set_ylim(*self.initial_ylim)
         self.ax.axhline(y=0, color=self.colors['primary'], linestyle='-', alpha=0.8, linewidth=2, zorder=5)
         self.ax.axvline(x=0, color=self.colors['primary'], linestyle='-', alpha=0.8, linewidth=2, zorder=5)
     
@@ -1023,8 +1019,8 @@ class EpsilonDeltaVisualizer:
         ax_delta.spines['left'].set_linewidth(1.5)
         ax_delta.spines['bottom'].set_color(self.colors['border'])
         ax_delta.spines['bottom'].set_linewidth(1.5)
-        self.delta_slider = Slider(ax_delta, 'δ', 0.001, 2, valinit=self.delta,
-                                  valfmt='%.3f', valstep=0.001,
+        self.delta_slider = Slider(ax_delta, 'δ', 0.0001, 1.0, valinit=self.delta,
+                                  valfmt='%.4f', valstep=0.0001,
                                   facecolor=self.colors['accent2'],
                                   edgecolor=self.colors['accent2'])
         self.delta_slider.valtext.set_visible(False)
@@ -1157,19 +1153,19 @@ class EpsilonDeltaVisualizer:
     
     def on_delta_slider_changed(self, val):
         """δスライダーが変更されたときに入力欄を更新"""
-        self.delta_input.set_val(f'{val:.3f}')
+        self.delta_input.set_val(f'{val:.4f}')
         self.update(val)
     
     def on_delta_input_submit(self, text):
         """δ入力欄が変更されたときにスライダーを更新"""
         try:
             val = float(text)
-            if 0.001 <= val <= 2:
+            if 0.0001 <= val <= 1.0:
                 self.delta_slider.set_val(val)
             else:
-                self.delta_input.set_val(f'{self.delta_slider.val:.3f}')
+                self.delta_input.set_val(f'{self.delta_slider.val:.4f}')
         except ValueError:
-            self.delta_input.set_val(f'{self.delta_slider.val:.3f}')
+            self.delta_input.set_val(f'{self.delta_slider.val:.4f}')
     
     def on_b_slider_changed(self, val):
         """bスライダーが変更されたときに入力欄を更新"""
