@@ -333,7 +333,7 @@ with st.sidebar:
     if st.button("b を 0 に"):
         st.session_state._ed_b_zero = True
         st.rerun()
-    z1, z2 = st.columns(2)
+    z1, z2, z3, z4 = st.columns(4)
     with z1:
         if st.button("拡大"):
             viz.zoom_in(None)
@@ -342,6 +342,16 @@ with st.sidebar:
     with z2:
         if st.button("縮小"):
             viz.zoom_out(None)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
+    with z3:
+        if st.button("10倍拡大"):
+            viz.zoom_in_fast(None)
+            st.session_state.view_xlim = tuple(viz.ax.get_xlim())
+            st.session_state.view_ylim = tuple(viz.ax.get_ylim())
+    with z4:
+        if st.button("10倍縮小"):
+            viz.zoom_out_fast(None)
             st.session_state.view_xlim = tuple(viz.ax.get_xlim())
             st.session_state.view_ylim = tuple(viz.ax.get_ylim())
     if st.button("リセット（初期値・表示範囲）"):
