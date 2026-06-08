@@ -317,22 +317,22 @@ with st.sidebar:
     p0, p1, p2, p3 = st.columns(4)
     with p0:
         if st.button("◀", help="左へ"):
-            viz.pan_by_data(-step_x, 0.0)
+            viz.pan_by_data(step_x, 0.0)
             st.session_state.view_xlim = tuple(viz.ax.get_xlim())
             st.session_state.view_ylim = tuple(viz.ax.get_ylim())
     with p1:
         if st.button("▶", help="右へ"):
-            viz.pan_by_data(step_x, 0.0)
+            viz.pan_by_data(-step_x, 0.0)
             st.session_state.view_xlim = tuple(viz.ax.get_xlim())
             st.session_state.view_ylim = tuple(viz.ax.get_ylim())
     with p2:
         if st.button("▲", help="上へ"):
-            viz.pan_by_data(0.0, step_y)
+            viz.pan_by_data(0.0, -step_y)
             st.session_state.view_xlim = tuple(viz.ax.get_xlim())
             st.session_state.view_ylim = tuple(viz.ax.get_ylim())
     with p3:
         if st.button("▼", help="下へ"):
-            viz.pan_by_data(0.0, -step_y)
+            viz.pan_by_data(0.0, step_y)
             st.session_state.view_xlim = tuple(viz.ax.get_xlim())
             st.session_state.view_ylim = tuple(viz.ax.get_ylim())
 
