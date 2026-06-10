@@ -49,8 +49,17 @@ def _init_sidebar_state(viz: EpsilonDeltaVisualizer) -> None:
     st.session_state.view_ylim = tuple(viz.initial_ylim)
 
 
+def _request_epsilon_preset(val: float) -> None:
+    st.session_state._ed_eps_preset = float(val)
+    st.rerun()
+
+
 def _apply_pending_streamlit_mutations(viz: EpsilonDeltaVisualizer) -> None:
     """ウィジェットより前に session_state を書き換え（Streamlit の制約対策）"""
+    if "_ed_eps_preset" in st.session_state:
+        eps_val = float(st.session_state.pop("_ed_eps_preset"))
+        st.session_state.seps = eps_val
+        st.session_state.seps_num = eps_val
     if st.session_state.pop("_ed_b_zero", False):
         st.session_state.sb = 0.0
         st.session_state.sb_num = 0.0
@@ -140,6 +149,38 @@ st.markdown(
         [data-testid="stSidebar"][aria-expanded="false"] {
             transform: translateX(0) !important;
             margin-left: 0 !important;
+        }
+
+        /* メイン領域：タイトルとグラフの位置を固定 */
+        section.main > div.block-container {
+            padding-top: 1.25rem !important;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+            padding-bottom: 1rem !important;
+            max-width: 100% !important;
+        }
+        section.main h1 {
+            text-align: left !important;
+            margin: 0 0 0.75rem 0 !important;
+            padding: 0 !important;
+            font-size: 2.25rem !important;
+            line-height: 1.2 !important;
+        }
+        div[data-testid="stMain"] {
+            overflow: auto !important;
+        }
+        div[data-testid="stMain"] div[data-testid="stVerticalBlock"] > div:has(h1) + div[data-testid="stVerticalBlock"] {
+            margin-top: 0 !important;
+        }
+        div[data-testid="stMain"] div[data-testid="stPyplotGlobalUseContainerWidth"] {
+            margin-top: 0 !important;
+        }
+        div[data-testid="stMain"] div[data-testid="stPyplotGlobalUseContainerWidth"] img,
+        div[data-testid="stMain"] div[data-testid="stPyplotGlobalUseContainerWidth"] svg {
+            display: block !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            height: auto !important;
         }
     </style>
     """,
@@ -234,6 +275,16 @@ with st.sidebar:
         key="seps",
         on_change=partial(_sync_num_from_slider, "seps", "seps_num"),
     )
+    eps0, eps1, eps2 = st.columns(3)
+    with eps0:
+        if st.button("0.5", key="eps_preset_05"):
+            _request_epsilon_preset(0.5)
+    with eps1:
+        if st.button("0.02", key="eps_preset_002"):
+            _request_epsilon_preset(0.02)
+    with eps2:
+        if st.button("0.001", key="eps_preset_0001"):
+            _request_epsilon_preset(0.001)
     st.number_input(
         "ε（数値入力）",
         min_value=0.001,
