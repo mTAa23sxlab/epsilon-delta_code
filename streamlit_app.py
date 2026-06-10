@@ -75,13 +75,17 @@ def _apply_pending_streamlit_mutations(viz: EpsilonDeltaVisualizer) -> None:
         st.session_state.view_ylim = tuple(viz.initial_ylim)
 
 
-def _render_plot(viz: EpsilonDeltaVisualizer) -> None:
+def _render_plot(viz: EpsilonDeltaVisualizer, plot_slot) -> None:
     expr = st.session_state.func_expr_key
     viz.a = float(st.session_state.sa)
     # スライダーと数値入力のずれを防ぎ、常に同期済みの値を使う
     viz.epsilon = float(st.session_state.get("seps_num", st.session_state.seps))
     viz.delta = float(st.session_state.get("sdelta_num", st.session_state.sdelta))
     viz.b = float(st.session_state.get("sb_num", st.session_state.sb))
+
+    if "view_xlim" in st.session_state and "view_ylim" in st.session_state:
+        viz.ax.set_xlim(st.session_state.view_xlim)
+        viz.ax.set_ylim(st.session_state.view_ylim)
 
     if expr != viz.function_expr:
         viz.update_function(expr)
@@ -90,7 +94,9 @@ def _render_plot(viz: EpsilonDeltaVisualizer) -> None:
 
     st.session_state.view_xlim = tuple(viz.ax.get_xlim())
     st.session_state.view_ylim = tuple(viz.ax.get_ylim())
-    st.pyplot(viz.fig, use_container_width=True, dpi=72)
+    viz.fig.canvas.draw()
+    with plot_slot:
+        st.pyplot(viz.fig, use_container_width=True, dpi=72, clear_figure=False)
 
 
 st.set_page_config(
@@ -150,7 +156,7 @@ st.markdown(
             margin-left: 0 !important;
         }
 
-        /* 右メイン：縦スクロール不可・タイトルとグラフを上端に固定 */
+        /* 右メイン：自然な位置に配置・縦スクロール不可 */
         .stApp {
             overflow: hidden !important;
         }
@@ -168,21 +174,18 @@ st.markdown(
             max-height: 100vh !important;
         }
         section.main > div.block-container {
-            position: fixed !important;
-            top: 0 !important;
-            left: max(22rem, 32%) !important;
-            right: 0 !important;
-            bottom: 0 !important;
-            padding: 1.25rem 1.5rem 1rem 1.5rem !important;
-            margin: 0 !important;
-            max-width: none !important;
+            padding-top: 0.5rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-bottom: 1rem !important;
+            margin: 0 auto !important;
+            max-width: 100% !important;
             overflow: hidden !important;
             box-sizing: border-box !important;
-            z-index: 1 !important;
         }
         section.main h1 {
             text-align: left !important;
-            margin: 0 0 0.75rem 0 !important;
+            margin: 0 0 0.5rem 0 !important;
             padding: 0 !important;
             font-size: 2.25rem !important;
             line-height: 1.2 !important;
@@ -196,6 +199,10 @@ st.markdown(
             margin: 0 !important;
             max-width: 100% !important;
             height: auto !important;
+        }
+        /* 古いグラフ画像が残らないよう、直近1枚だけ表示 */
+        div[data-testid="stMain"] div[data-testid="stVerticalBlock"] > div[data-testid="element-container"]:has([data-testid="stPyplotGlobalUseContainerWidth"]) ~ div[data-testid="element-container"]:has([data-testid="stPyplotGlobalUseContainerWidth"]) {
+            display: none !important;
         }
         /* サイドバーだけ縦スクロール可 */
         section[data-testid="stSidebar"] {
@@ -239,20 +246,18 @@ if "sidebar_lock_injected" not in st.session_state:
                     main.style.overflow = "hidden";
                     main.scrollTop = 0;
                 }
-                const mainBlock = doc.querySelector("section.main > div.block-container");
-                if (mainBlock) {
-                    mainBlock.scrollTop = 0;
-                }
+                doc.querySelectorAll(
+                    '[data-testid="stMain"] [data-testid="stPyplotGlobalUseContainerWidth"]'
+                ).forEach((el, idx, arr) => {
+                    if (idx < arr.length - 1) {
+                        const container = el.closest('[data-testid="element-container"]');
+                        if (container) container.style.display = "none";
+                    }
+                });
             };
             hideControls();
             window.setTimeout(hideControls, 100);
             window.setTimeout(hideControls, 500);
-            window.setInterval(() => {
-                const main = doc.querySelector('[data-testid="stMain"]');
-                if (main && main.scrollTop !== 0) {
-                    main.scrollTop = 0;
-                }
-            }, 300);
         })();
         </script>
         """,
@@ -266,10 +271,7 @@ _init_sidebar_state(viz)
 _apply_pending_streamlit_mutations(viz)
 
 st.title("ε-δ論法")
-
-if "view_xlim" in st.session_state and "view_ylim" in st.session_state:
-    viz.ax.set_xlim(st.session_state.view_xlim)
-    viz.ax.set_ylim(st.session_state.view_ylim)
+plot_slot = st.empty()
 
 for _sk, _nk in (
     ("sa", "sa_num"),
@@ -463,4 +465,4 @@ with st.sidebar:
         st.session_state._ed_full_reset = True
         st.rerun()
 
-_render_plot(viz)
+_render_plot(viz, plot_slot)
