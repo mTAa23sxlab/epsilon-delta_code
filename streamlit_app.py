@@ -152,35 +152,32 @@ st.markdown(
             margin-left: 0 !important;
         }
 
-        /* 右メイン：タイトル上・グラフを領域の中央に */
-        section.main > div.block-container {
-            padding: 1rem !important;
-            max-width: 100% !important;
+        /* 右メイン：タイトル＋グラフを右領域の縦横中央へ */
+        div[data-testid="stMain"] {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
             min-height: 100vh !important;
+            padding-top: 0 !important;
+        }
+        section.main > div.block-container {
+            padding: 0 1.25rem !important;
+            padding-top: 0 !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
             box-sizing: border-box !important;
         }
         section.main > div.block-container > div[data-testid="stVerticalBlock"] {
-            min-height: calc(100vh - 2rem) !important;
-            display: flex !important;
-            flex-direction: column !important;
             width: 100% !important;
         }
         section.main h1 {
             text-align: left !important;
-            margin: 0 0 0.75rem 0 !important;
+            margin: 0 0 0.5rem 0 !important;
             padding: 0 !important;
             font-size: 2.25rem !important;
             line-height: 1.2 !important;
-            flex: 0 0 auto !important;
             width: 100% !important;
-        }
-        section.main div[data-testid="element-container"]:has([data-testid="stPyplotGlobalUseContainerWidth"]) {
-            flex: 1 1 auto !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 100% !important;
-            min-height: 0 !important;
         }
         div[data-testid="stMain"] div[data-testid="stPyplotGlobalUseContainerWidth"] {
             width: 100% !important;
@@ -218,8 +215,29 @@ if "sidebar_lock_injected" not in st.session_state:
                     }
                 });
             };
+            const dedupePlots = () => {
+                const main = doc.querySelector('[data-testid="stMain"]');
+                if (!main) return;
+                const containers = Array.from(
+                    main.querySelectorAll('[data-testid="element-container"]')
+                ).filter((el) =>
+                    el.querySelector('[data-testid="stPyplotGlobalUseContainerWidth"]')
+                );
+                containers.slice(0, -1).forEach((el) => el.remove());
+            };
+            const watchPlots = () => {
+                const main = doc.querySelector('[data-testid="stMain"]');
+                if (!main || main.dataset.edPlotWatcher) return;
+                main.dataset.edPlotWatcher = "1";
+                dedupePlots();
+                new MutationObserver(dedupePlots).observe(main, {
+                    childList: true,
+                    subtree: true,
+                });
+            };
             hideControls();
-            window.setTimeout(hideControls, 100);
+            watchPlots();
+            window.setTimeout(() => { hideControls(); watchPlots(); }, 100);
         })();
         </script>
         """,
@@ -233,7 +251,6 @@ _init_sidebar_state(viz)
 _apply_pending_streamlit_mutations(viz)
 
 st.title("ε-δ論法")
-plot_area = st.empty()
 
 for _sk, _nk in (
     ("sa", "sa_num"),
@@ -427,5 +444,4 @@ with st.sidebar:
         st.session_state._ed_full_reset = True
         st.rerun()
 
-with plot_area.container():
-    _render_plot(viz)
+_render_plot(viz)
