@@ -49,17 +49,15 @@ def _init_sidebar_state(viz: EpsilonDeltaVisualizer) -> None:
     st.session_state.view_ylim = tuple(viz.initial_ylim)
 
 
-def _request_epsilon_preset(val: float) -> None:
-    st.session_state._ed_eps_preset = float(val)
-    st.rerun()
+def _apply_epsilon_preset(val: float) -> None:
+    """ε プリセット（スライダー・数値入力を同時更新）"""
+    eps_val = float(val)
+    st.session_state.seps = eps_val
+    st.session_state.seps_num = eps_val
 
 
 def _apply_pending_streamlit_mutations(viz: EpsilonDeltaVisualizer) -> None:
     """ウィジェットより前に session_state を書き換え（Streamlit の制約対策）"""
-    if "_ed_eps_preset" in st.session_state:
-        eps_val = float(st.session_state.pop("_ed_eps_preset"))
-        st.session_state.seps = eps_val
-        st.session_state.seps_num = eps_val
     if st.session_state.pop("_ed_b_zero", False):
         st.session_state.sb = 0.0
         st.session_state.sb_num = 0.0
@@ -80,9 +78,10 @@ def _apply_pending_streamlit_mutations(viz: EpsilonDeltaVisualizer) -> None:
 def _render_plot(viz: EpsilonDeltaVisualizer) -> None:
     expr = st.session_state.func_expr_key
     viz.a = float(st.session_state.sa)
-    viz.epsilon = float(st.session_state.seps)
-    viz.delta = float(st.session_state.sdelta)
-    viz.b = float(st.session_state.sb)
+    # スライダーと数値入力のずれを防ぎ、常に同期済みの値を使う
+    viz.epsilon = float(st.session_state.get("seps_num", st.session_state.seps))
+    viz.delta = float(st.session_state.get("sdelta_num", st.session_state.sdelta))
+    viz.b = float(st.session_state.get("sb_num", st.session_state.sb))
 
     if expr != viz.function_expr:
         viz.update_function(expr)
@@ -151,13 +150,35 @@ st.markdown(
             margin-left: 0 !important;
         }
 
-        /* メイン領域：タイトルとグラフの位置を固定 */
+        /* 右メイン：縦スクロール不可・タイトルとグラフを上端に固定 */
+        .stApp {
+            overflow: hidden !important;
+        }
+        [data-testid="stAppViewContainer"] {
+            overflow: hidden !important;
+            height: 100vh !important;
+        }
+        [data-testid="stAppViewContainer"] > .main {
+            overflow: hidden !important;
+            height: 100vh !important;
+        }
+        div[data-testid="stMain"] {
+            overflow: hidden !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+        }
         section.main > div.block-container {
-            padding-top: 1.25rem !important;
-            padding-left: 1.5rem !important;
-            padding-right: 1.5rem !important;
-            padding-bottom: 1rem !important;
-            max-width: 100% !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: max(22rem, 32%) !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            padding: 1.25rem 1.5rem 1rem 1.5rem !important;
+            margin: 0 !important;
+            max-width: none !important;
+            overflow: hidden !important;
+            box-sizing: border-box !important;
+            z-index: 1 !important;
         }
         section.main h1 {
             text-align: left !important;
@@ -165,12 +186,6 @@ st.markdown(
             padding: 0 !important;
             font-size: 2.25rem !important;
             line-height: 1.2 !important;
-        }
-        div[data-testid="stMain"] {
-            overflow: auto !important;
-        }
-        div[data-testid="stMain"] div[data-testid="stVerticalBlock"] > div:has(h1) + div[data-testid="stVerticalBlock"] {
-            margin-top: 0 !important;
         }
         div[data-testid="stMain"] div[data-testid="stPyplotGlobalUseContainerWidth"] {
             margin-top: 0 !important;
@@ -181,6 +196,12 @@ st.markdown(
             margin: 0 !important;
             max-width: 100% !important;
             height: auto !important;
+        }
+        /* サイドバーだけ縦スクロール可 */
+        section[data-testid="stSidebar"] {
+            overflow-y: auto !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
         }
     </style>
     """,
@@ -213,10 +234,25 @@ if "sidebar_lock_injected" not in st.session_state:
                         window.parent.localStorage.setItem(key, "false");
                     }
                 });
+                const main = doc.querySelector('[data-testid="stMain"]');
+                if (main) {
+                    main.style.overflow = "hidden";
+                    main.scrollTop = 0;
+                }
+                const mainBlock = doc.querySelector("section.main > div.block-container");
+                if (mainBlock) {
+                    mainBlock.scrollTop = 0;
+                }
             };
             hideControls();
             window.setTimeout(hideControls, 100);
             window.setTimeout(hideControls, 500);
+            window.setInterval(() => {
+                const main = doc.querySelector('[data-testid="stMain"]');
+                if (main && main.scrollTop !== 0) {
+                    main.scrollTop = 0;
+                }
+            }, 300);
         })();
         </script>
         """,
@@ -225,11 +261,11 @@ if "sidebar_lock_injected" not in st.session_state:
     )
     st.session_state.sidebar_lock_injected = True
 
-st.title("ε-δ論法")
-
 viz = get_visualizer()
 _init_sidebar_state(viz)
 _apply_pending_streamlit_mutations(viz)
+
+st.title("ε-δ論法")
 
 if "view_xlim" in st.session_state and "view_ylim" in st.session_state:
     viz.ax.set_xlim(st.session_state.view_xlim)
@@ -277,14 +313,26 @@ with st.sidebar:
     )
     eps0, eps1, eps2 = st.columns(3)
     with eps0:
-        if st.button("0.5", key="eps_preset_05"):
-            _request_epsilon_preset(0.5)
+        st.button(
+            "0.5",
+            key="eps_preset_05",
+            on_click=_apply_epsilon_preset,
+            args=(0.5,),
+        )
     with eps1:
-        if st.button("0.02", key="eps_preset_002"):
-            _request_epsilon_preset(0.02)
+        st.button(
+            "0.02",
+            key="eps_preset_002",
+            on_click=_apply_epsilon_preset,
+            args=(0.02,),
+        )
     with eps2:
-        if st.button("0.001", key="eps_preset_0001"):
-            _request_epsilon_preset(0.001)
+        st.button(
+            "0.001",
+            key="eps_preset_0001",
+            on_click=_apply_epsilon_preset,
+            args=(0.001,),
+        )
     st.number_input(
         "ε（数値入力）",
         min_value=0.001,
