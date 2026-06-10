@@ -152,34 +152,35 @@ st.markdown(
             margin-left: 0 !important;
         }
 
-        /* 右メイン：やや上寄せ・グラフを縦中央 */
+        /* 右メイン：タイトル上・グラフを領域の中央に */
         section.main > div.block-container {
-            padding-top: 0 !important;
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
+            padding: 1rem !important;
             max-width: 100% !important;
             min-height: 100vh !important;
+            box-sizing: border-box !important;
+        }
+        section.main > div.block-container > div[data-testid="stVerticalBlock"] {
+            min-height: calc(100vh - 2rem) !important;
             display: flex !important;
             flex-direction: column !important;
-            justify-content: center !important;
-            box-sizing: border-box !important;
+            width: 100% !important;
         }
         section.main h1 {
             text-align: left !important;
-            margin: 0 0 0.5rem 0 !important;
+            margin: 0 0 0.75rem 0 !important;
             padding: 0 !important;
             font-size: 2.25rem !important;
             line-height: 1.2 !important;
             flex: 0 0 auto !important;
-            transform: translateY(-2.5vh) !important;
+            width: 100% !important;
         }
-        section.main div[data-testid="stVerticalBlock"]:has([data-testid="stPyplotGlobalUseContainerWidth"]) {
+        section.main div[data-testid="element-container"]:has([data-testid="stPyplotGlobalUseContainerWidth"]) {
             flex: 1 1 auto !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
             width: 100% !important;
-            transform: translateY(-2.5vh) !important;
+            min-height: 0 !important;
         }
         div[data-testid="stMain"] div[data-testid="stPyplotGlobalUseContainerWidth"] {
             width: 100% !important;
@@ -232,6 +233,7 @@ _init_sidebar_state(viz)
 _apply_pending_streamlit_mutations(viz)
 
 st.title("ε-δ論法")
+plot_area = st.empty()
 
 for _sk, _nk in (
     ("sa", "sa_num"),
@@ -425,4 +427,5 @@ with st.sidebar:
         st.session_state._ed_full_reset = True
         st.rerun()
 
-_render_plot(viz)
+with plot_area.container():
+    _render_plot(viz)
