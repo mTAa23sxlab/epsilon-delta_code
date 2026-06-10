@@ -1493,12 +1493,12 @@ class EpsilonDeltaVisualizer:
 
         # 既存の要素をクリア（関数の線・軸ラベル以外）
         # list() でコピーしてから remove（連打時のパッチ残りを防ぐ）
-        for artist in list(self.ax.collections):
-            artist.remove()
-        for artist in list(self.ax.patches):
-            artist.remove()
-        for artist in list(self.ax.images):
-            artist.remove()
+        while self.ax.patches:
+            self.ax.patches[0].remove()
+        while self.ax.collections:
+            self.ax.collections[0].remove()
+        while self.ax.images:
+            self.ax.images[0].remove()
         for artist in list(self.ax.texts):
             if artist not in protected_texts:
                 artist.remove()
