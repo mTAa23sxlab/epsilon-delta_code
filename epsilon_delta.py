@@ -132,14 +132,13 @@ class EpsilonDeltaVisualizer:
         # コントロール（Streamlit 版は外部ウィジェットのため図のみ）
         if self._streamlit_mode:
             plt.subplots_adjust(left=0.06, bottom=0.1, right=0.95, top=0.95)
+            self.ax.set_xlim(*self.initial_xlim)
+            self.ax.set_ylim(*self.initial_ylim)
         else:
             self.add_controls()
-        
-        # 初期描画
-        self.update(None)
-        
-        self.ax.set_xlim(*self.initial_xlim)
-        self.ax.set_ylim(*self.initial_ylim)
+            self.update(None)
+            self.ax.set_xlim(*self.initial_xlim)
+            self.ax.set_ylim(*self.initial_ylim)
     
     def setup_modern_style(self):
         """シンプルで洗練されたスタイルを設定"""
