@@ -75,10 +75,9 @@ def _apply_pending_streamlit_mutations(viz: EpsilonDeltaVisualizer) -> None:
         st.session_state.view_ylim = tuple(viz.initial_ylim)
 
 
-def _render_plot(viz: EpsilonDeltaVisualizer, plot_slot) -> None:
+def _render_plot(viz: EpsilonDeltaVisualizer) -> None:
     expr = st.session_state.func_expr_key
     viz.a = float(st.session_state.sa)
-    # スライダーと数値入力のずれを防ぎ、常に同期済みの値を使う
     viz.epsilon = float(st.session_state.get("seps_num", st.session_state.seps))
     viz.delta = float(st.session_state.get("sdelta_num", st.session_state.sdelta))
     viz.b = float(st.session_state.get("sb_num", st.session_state.sb))
@@ -94,9 +93,7 @@ def _render_plot(viz: EpsilonDeltaVisualizer, plot_slot) -> None:
 
     st.session_state.view_xlim = tuple(viz.ax.get_xlim())
     st.session_state.view_ylim = tuple(viz.ax.get_ylim())
-    viz.fig.canvas.draw()
-    with plot_slot:
-        st.pyplot(viz.fig, use_container_width=True, dpi=72, clear_figure=False)
+    st.pyplot(viz.fig, use_container_width=True, dpi=72, clear_figure=False)
 
 
 st.set_page_config(
@@ -111,7 +108,6 @@ st.set_page_config(
     },
 )
 
-# 右上のメニュー（⋮）・Deploy 等を非表示。サイドバーは常に開いたままにする。
 st.markdown(
     """
     <style>
@@ -142,10 +138,10 @@ st.markdown(
             width: 32% !important;
             min-width: 22rem !important;
             max-width: 36rem !important;
+            overflow-y: auto !important;
+            height: 100vh !important;
         }
-        section[data-testid="stSidebar"] > div {
-            width: 100% !important;
-        }
+        section[data-testid="stSidebar"] > div,
         [data-testid="stSidebarContent"] {
             width: 100% !important;
             opacity: 1 !important;
@@ -156,31 +152,16 @@ st.markdown(
             margin-left: 0 !important;
         }
 
-        /* 右メイン：自然な位置に配置・縦スクロール不可 */
-        .stApp {
-            overflow: hidden !important;
-        }
-        [data-testid="stAppViewContainer"] {
-            overflow: hidden !important;
-            height: 100vh !important;
-        }
-        [data-testid="stAppViewContainer"] > .main {
-            overflow: hidden !important;
-            height: 100vh !important;
-        }
-        div[data-testid="stMain"] {
-            overflow: hidden !important;
-            height: 100vh !important;
-            max-height: 100vh !important;
-        }
+        /* 右メイン：やや上寄せ・グラフを縦中央 */
         section.main > div.block-container {
-            padding-top: 0.5rem !important;
+            padding-top: 0 !important;
             padding-left: 1rem !important;
             padding-right: 1rem !important;
-            padding-bottom: 1rem !important;
-            margin: 0 auto !important;
             max-width: 100% !important;
-            overflow: hidden !important;
+            min-height: 100vh !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
             box-sizing: border-box !important;
         }
         section.main h1 {
@@ -189,26 +170,20 @@ st.markdown(
             padding: 0 !important;
             font-size: 2.25rem !important;
             line-height: 1.2 !important;
+            flex: 0 0 auto !important;
+            transform: translateY(-2.5vh) !important;
+        }
+        section.main div[data-testid="stVerticalBlock"]:has([data-testid="stPyplotGlobalUseContainerWidth"]) {
+            flex: 1 1 auto !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+            transform: translateY(-2.5vh) !important;
         }
         div[data-testid="stMain"] div[data-testid="stPyplotGlobalUseContainerWidth"] {
-            margin-top: 0 !important;
-        }
-        div[data-testid="stMain"] div[data-testid="stPyplotGlobalUseContainerWidth"] img,
-        div[data-testid="stMain"] div[data-testid="stPyplotGlobalUseContainerWidth"] svg {
-            display: block !important;
-            margin: 0 !important;
-            max-width: 100% !important;
-            height: auto !important;
-        }
-        /* 古いグラフ画像が残らないよう、直近1枚だけ表示 */
-        div[data-testid="stMain"] div[data-testid="stVerticalBlock"] > div[data-testid="element-container"]:has([data-testid="stPyplotGlobalUseContainerWidth"]) ~ div[data-testid="element-container"]:has([data-testid="stPyplotGlobalUseContainerWidth"]) {
-            display: none !important;
-        }
-        /* サイドバーだけ縦スクロール可 */
-        section[data-testid="stSidebar"] {
-            overflow-y: auto !important;
-            height: 100vh !important;
-            max-height: 100vh !important;
+            width: 100% !important;
+            margin: 0 auto !important;
         }
     </style>
     """,
@@ -241,23 +216,9 @@ if "sidebar_lock_injected" not in st.session_state:
                         window.parent.localStorage.setItem(key, "false");
                     }
                 });
-                const main = doc.querySelector('[data-testid="stMain"]');
-                if (main) {
-                    main.style.overflow = "hidden";
-                    main.scrollTop = 0;
-                }
-                doc.querySelectorAll(
-                    '[data-testid="stMain"] [data-testid="stPyplotGlobalUseContainerWidth"]'
-                ).forEach((el, idx, arr) => {
-                    if (idx < arr.length - 1) {
-                        const container = el.closest('[data-testid="element-container"]');
-                        if (container) container.style.display = "none";
-                    }
-                });
             };
             hideControls();
             window.setTimeout(hideControls, 100);
-            window.setTimeout(hideControls, 500);
         })();
         </script>
         """,
@@ -271,7 +232,6 @@ _init_sidebar_state(viz)
 _apply_pending_streamlit_mutations(viz)
 
 st.title("ε-δ論法")
-plot_slot = st.empty()
 
 for _sk, _nk in (
     ("sa", "sa_num"),
@@ -465,4 +425,4 @@ with st.sidebar:
         st.session_state._ed_full_reset = True
         st.rerun()
 
-_render_plot(viz, plot_slot)
+_render_plot(viz)
