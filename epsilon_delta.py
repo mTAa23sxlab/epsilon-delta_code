@@ -1493,13 +1493,18 @@ class EpsilonDeltaVisualizer:
             protected_texts.add(self.origin_label)
 
         # 既存の要素をクリア（関数の線・軸ラベル以外）
-        for artist in self.ax.collections + self.ax.patches:
+        # list() でコピーしてから remove（連打時のパッチ残りを防ぐ）
+        for artist in list(self.ax.collections):
             artist.remove()
-        for artist in self.ax.texts:
+        for artist in list(self.ax.patches):
+            artist.remove()
+        for artist in list(self.ax.images):
+            artist.remove()
+        for artist in list(self.ax.texts):
             if artist not in protected_texts:
                 artist.remove()
 
-        lines_to_remove = [line for line in self.ax.lines if line not in protected_lines]
+        lines_to_remove = [line for line in list(self.ax.lines) if line not in protected_lines]
         for line in lines_to_remove:
             line.remove()
         
