@@ -5,9 +5,9 @@ Streamlit 用エントリポイント（クラウド公開向け）。
   pip install -r requirements.txt
   streamlit run streamlit_app.py
 
-GitHub 連携: Streamlit Community Cloud
-  https://streamlit.io/cloud
-  → リポジトリを接続し、Main file に streamlit_app.py を指定。
+Render（60人同時利用想定）:
+  リポジトリを接続し Blueprint（render.yaml）からデプロイ。
+  インスタンスは Pro（4GB）以上・台数 1（水平スケールは WebSocket 都合で非推奨）。
 """
 import matplotlib
 from functools import partial
@@ -27,9 +27,11 @@ def _sync_slider_from_num(slider_key: str, num_key: str) -> None:
     st.session_state[slider_key] = st.session_state[num_key]
 
 
-@st.cache_resource
 def get_visualizer() -> EpsilonDeltaVisualizer:
-    return EpsilonDeltaVisualizer(streamlit_mode=True)
+    """利用者ごとに 1 つ。cache_resource だと全員で matplotlib 状態が共有されてしまう。"""
+    if "ed_visualizer" not in st.session_state:
+        st.session_state.ed_visualizer = EpsilonDeltaVisualizer(streamlit_mode=True)
+    return st.session_state.ed_visualizer
 
 
 def _init_sidebar_state(viz: EpsilonDeltaVisualizer) -> None:
