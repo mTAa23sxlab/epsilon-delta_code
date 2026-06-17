@@ -1,0 +1,29 @@
+# Render Blueprint — ε-δ 論法 Streamlit（60人同時利用想定）
+# https://render.com/docs/blueprint-spec
+#
+# デプロイ: Render Dashboard → New → Blueprint → このリポジトリを選択
+#
+# 60人規模の目安:
+#   - plan: pro（4GB）で開始。メモリ不足時は pro_plus（8GB）へ
+#   - numInstances: 1 固定（Streamlit は水平スケールで WebSocket が切れやすい）
+#   - ワークスペースは Pro 以上（スリープなし・本番向け）
+
+services:
+  - type: web
+    name: epsilon-delta
+    runtime: python
+    plan: pro
+    numInstances: 1
+    buildCommand: pip install -r requirements.txt
+    startCommand: >-
+      streamlit run streamlit_app.py
+      --server.port=$PORT
+      --server.address=0.0.0.0
+      --server.headless=true
+      --browser.gatherUsageStats=false
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      - key: MPLCONFIGDIR
+        value: /tmp/matplotlib
