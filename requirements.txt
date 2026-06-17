@@ -1,5 +1,5 @@
-# Streamlit Community Cloud では依存を最小限にし、pip に互換解決を任せる
-streamlit>=1.31,<2
+# Render Web Service / ローカル共通（依存は最小限、pip に互換解決を任せる）
+streamlit>=1.33,<2
 numpy>=1.26
 matplotlib>=3.8
 sympy>=1.12
