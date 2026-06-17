@@ -1,0 +1,8 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.mplconfig/
+.DS_Store
+.env
+.env.*
